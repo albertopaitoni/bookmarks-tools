@@ -62,6 +62,14 @@ let appState = {
   timelineSelectedIndex: -1,
   timelinePlaying: false,
   timelineInterval: null,
+
+  // Stato Esplora
+  exploreActiveSubTab: 'tarot', // 'tarot' or 'wrapped'
+  tarotNumCards: 3,
+  tarotPrioritizeOld: true,
+  tarotHand: [], // preferiti attualmente in mano: { bookmark, flipped }
+  wrappedCurrentSlide: 0,
+  wrappedStats: null,
 };
 
 // --- DOM ELEMENTS ---
@@ -131,11 +139,36 @@ const elements = {
   // Selettori di Modalità dell'App
   modeConvertTab: document.getElementById('mode-convert-tab'),
   modeCompareTab: document.getElementById('mode-compare-tab'),
+  modeExploreTab: document.getElementById('mode-explore-tab'),
   
   // Container di visualizzazione
   convertUploadContainer: document.getElementById('convert-upload-container'),
   compareUploadContainer: document.getElementById('compare-upload-container'),
   compareResultsContainer: document.getElementById('compare-results-container'),
+  exploreResultsContainer: document.getElementById('explore-results-container'),
+
+  // Elementi Esplora
+  explorePlaceholder: document.getElementById('explore-placeholder'),
+  btnExploreLoadExample: document.getElementById('btn-explore-load-example'),
+  exploreContent: document.getElementById('explore-content'),
+  btnExploreSubTarot: document.getElementById('btn-explore-sub-tarot'),
+  btnExploreSubWrapped: document.getElementById('btn-explore-sub-wrapped'),
+  exploreSecTarot: document.getElementById('explore-sec-tarot'),
+  exploreSecWrapped: document.getElementById('explore-sec-wrapped'),
+
+  // Tarocchi
+  optTarotCount: document.getElementById('opt-tarot-count'),
+  optTarotOld: document.getElementById('opt-tarot-old'),
+  btnTarotReshuffle: document.getElementById('btn-tarot-reshuffle'),
+  tarotCardsGrid: document.getElementById('tarot-cards-grid'),
+
+  // Wrapped
+  wrappedStoryProgress: document.getElementById('wrapped-story-progress'),
+  wrappedActiveSlideContainer: document.getElementById('wrapped-active-slide-container'),
+  btnWrappedPrev: document.getElementById('btn-wrapped-prev'),
+  btnWrappedNext: document.getElementById('btn-wrapped-next'),
+  wrappedSlideCounter: document.getElementById('wrapped-slide-counter'),
+  btnWrappedCopyReport: document.getElementById('btn-wrapped-copy-report'),
   
   // Caricamento File A (Vecchio)
   btnCompareModeFileA: document.getElementById('btn-compare-mode-file-a'),
@@ -216,7 +249,10 @@ const elements = {
   
   // La Macchina del Tempo (Timeline Nostalgia)
   secTimeline: document.getElementById('sec-timeline'),
+  timelineHeader: document.getElementById('timeline-header'),
   btnTimelineToggleMode: document.getElementById('btn-timeline-toggle-mode'),
+  btnTimelineToggleExpand: document.getElementById('btn-timeline-toggle-expand'),
+  timelineExpandIcon: document.getElementById('timeline-expand-icon'),
   timelinePeriodDisplay: document.getElementById('timeline-period-display'),
   timelineCountDisplay: document.getElementById('timeline-count-display'),
   timelineChart: document.getElementById('timeline-chart'),
@@ -612,6 +648,58 @@ function setupEventListeners() {
   if (elements.btnTimelinePlay) {
     elements.btnTimelinePlay.addEventListener('click', toggleTimelinePlay);
   }
+  if (elements.timelineHeader) {
+    elements.timelineHeader.addEventListener('click', (e) => {
+      if (e.target.closest('#btn-timeline-toggle-mode') || e.target.closest('#btn-timeline-toggle-expand')) {
+        return;
+      }
+      toggleTimelineCollapse();
+    });
+  }
+  if (elements.btnTimelineToggleExpand) {
+    elements.btnTimelineToggleExpand.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleTimelineCollapse();
+    });
+  }
+
+  // Eventi per modalità Esplora
+  if (elements.modeExploreTab) {
+    elements.modeExploreTab.addEventListener('click', () => switchAppMode('explore'));
+  }
+  if (elements.btnExploreLoadExample) {
+    elements.btnExploreLoadExample.addEventListener('click', loadExampleFile);
+  }
+  if (elements.btnExploreSubTarot) {
+    elements.btnExploreSubTarot.addEventListener('click', () => switchExploreSubTab('tarot'));
+  }
+  if (elements.btnExploreSubWrapped) {
+    elements.btnExploreSubWrapped.addEventListener('click', () => switchExploreSubTab('wrapped'));
+  }
+  if (elements.optTarotCount) {
+    elements.optTarotCount.addEventListener('change', (e) => {
+      appState.tarotNumCards = parseInt(e.target.value);
+      reshuffleTarot();
+    });
+  }
+  if (elements.optTarotOld) {
+    elements.optTarotOld.addEventListener('change', (e) => {
+      appState.tarotPrioritizeOld = e.target.checked;
+      reshuffleTarot();
+    });
+  }
+  if (elements.btnTarotReshuffle) {
+    elements.btnTarotReshuffle.addEventListener('click', reshuffleTarot);
+  }
+  if (elements.btnWrappedPrev) {
+    elements.btnWrappedPrev.addEventListener('click', () => navigateWrappedSlide(-1));
+  }
+  if (elements.btnWrappedNext) {
+    elements.btnWrappedNext.addEventListener('click', () => navigateWrappedSlide(1));
+  }
+  if (elements.btnWrappedCopyReport) {
+    elements.btnWrappedCopyReport.addEventListener('click', copyWrappedReport);
+  }
 }
 
 // --- LOGICA DI CONTROLLO INTERFACCIA ---
@@ -788,15 +876,24 @@ function processBookmarksData(shouldScroll = true) {
       applyFiltersAndRenderTable();
       renderVisuals();
       
-      // 6. Generazione file esportazione
+      // Generazione file esportazione
       updateExportOutput();
       
-      // Mostra pannello risultati
-      elements.resultsContainer.classList.remove('hidden');
+      // Reset dei dati della scheda Esplora
+      appState.wrappedStats = null;
+      appState.tarotHand = [];
+      if (appState.currentMode === 'explore') {
+        updateExploreTabUI();
+      }
+      
+      // Mostra pannello risultati solo in modalità convert
+      if (appState.currentMode === 'convert') {
+        elements.resultsContainer.classList.remove('hidden');
+      }
       hideLoader();
       showToast('Preferiti convertiti con successo!');
       
-      if (shouldScroll) {
+      if (shouldScroll && appState.currentMode === 'convert') {
         elements.resultsContainer.scrollIntoView({ behavior: 'smooth' });
       }
     } catch (error) {
@@ -1835,30 +1932,36 @@ function showToast(message) {
 function switchAppMode(mode) {
   appState.currentMode = mode;
   
+  // Rimuovi classe active da tutti i tab
+  elements.modeConvertTab.classList.remove('active');
+  elements.modeCompareTab.classList.remove('active');
+  if (elements.modeExploreTab) elements.modeExploreTab.classList.remove('active');
+  
+  // Nascondi tutti i container principali
+  elements.convertUploadContainer.classList.add('hidden');
+  elements.compareUploadContainer.classList.add('hidden');
+  elements.resultsContainer.classList.add('hidden');
+  elements.compareResultsContainer.classList.add('hidden');
+  if (elements.exploreResultsContainer) elements.exploreResultsContainer.classList.add('hidden');
+  
   if (mode === 'convert') {
     elements.modeConvertTab.classList.add('active');
-    elements.modeCompareTab.classList.remove('active');
-    
     elements.convertUploadContainer.classList.remove('hidden');
-    elements.compareUploadContainer.classList.add('hidden');
-    
-    // Mostra/nasconde i risultati corretti
     if (appState.parsedTree.length > 0) {
       elements.resultsContainer.classList.remove('hidden');
     }
-    elements.compareResultsContainer.classList.add('hidden');
-  } else {
-    elements.modeConvertTab.classList.remove('active');
+  } else if (mode === 'compare') {
     elements.modeCompareTab.classList.add('active');
-    
-    elements.convertUploadContainer.classList.add('hidden');
     elements.compareUploadContainer.classList.remove('hidden');
-    
-    // Mostra/nasconde i risultati corretti
-    elements.resultsContainer.classList.add('hidden');
     if (appState.comparisonResults) {
       elements.compareResultsContainer.classList.remove('hidden');
     }
+  } else if (mode === 'explore') {
+    if (elements.modeExploreTab) elements.modeExploreTab.classList.add('active');
+    if (elements.exploreResultsContainer) {
+      elements.exploreResultsContainer.classList.remove('hidden');
+    }
+    updateExploreTabUI();
   }
 }
 
@@ -2561,8 +2664,14 @@ function initTimeline() {
   }
   stopTimelinePlay();
   
-  // Rendi visibile
-  if (elements.secTimeline) elements.secTimeline.style.display = 'block';
+  // Rendi visibile e collassato
+  if (elements.secTimeline) {
+    elements.secTimeline.classList.add('collapsed');
+    elements.secTimeline.style.display = 'block';
+  }
+  if (elements.timelineExpandIcon) {
+    elements.timelineExpandIcon.style.transform = 'rotate(-90deg)';
+  }
   
   renderTimelineUI();
 }
@@ -2700,6 +2809,11 @@ function toggleTimelineMode() {
     if (appState.timelineActive) {
       elements.btnTimelineToggleMode.classList.add('active');
       elements.btnTimelineToggleMode.textContent = 'Filtro Temporale Attivo';
+      
+      // Auto-expand if currently collapsed
+      if (elements.secTimeline && elements.secTimeline.classList.contains('collapsed')) {
+        toggleTimelineCollapse();
+      }
     } else {
       elements.btnTimelineToggleMode.classList.remove('active');
       elements.btnTimelineToggleMode.textContent = 'Attiva Filtro Temporale';
@@ -2822,6 +2936,752 @@ function stopTimelinePlay() {
       <span>Play</span>
     `;
     elements.btnTimelinePlay.classList.remove('active');
+  }
+}
+
+function toggleTimelineCollapse() {
+  if (!elements.secTimeline) return;
+  const isCollapsed = elements.secTimeline.classList.toggle('collapsed');
+  
+  if (elements.timelineExpandIcon) {
+    if (isCollapsed) {
+      elements.timelineExpandIcon.style.transform = 'rotate(-90deg)';
+    } else {
+      elements.timelineExpandIcon.style.transform = 'rotate(0deg)';
+    }
+  }
+}
+
+// ==========================================
+// FUNZIONALITÀ DI ESPLORAZIONE (EXPLORE)
+// ==========================================
+
+function updateExploreTabUI() {
+  const hasData = appState.flatBookmarks && appState.flatBookmarks.length > 0;
+  
+  if (!hasData) {
+    if (elements.explorePlaceholder) elements.explorePlaceholder.classList.remove('hidden');
+    if (elements.exploreContent) elements.exploreContent.classList.add('hidden');
+  } else {
+    if (elements.explorePlaceholder) elements.explorePlaceholder.classList.add('hidden');
+    if (elements.exploreContent) elements.exploreContent.classList.remove('hidden');
+    
+    // Forza il caricamento del sotto-tab attivo
+    switchExploreSubTab(appState.exploreActiveSubTab);
+  }
+}
+
+function switchExploreSubTab(subTab) {
+  appState.exploreActiveSubTab = subTab;
+  
+  if (subTab === 'tarot') {
+    if (elements.btnExploreSubTarot) elements.btnExploreSubTarot.classList.add('active');
+    if (elements.btnExploreSubWrapped) elements.btnExploreSubWrapped.classList.remove('active');
+    if (elements.exploreSecTarot) elements.exploreSecTarot.classList.remove('hidden');
+    if (elements.exploreSecWrapped) elements.exploreSecWrapped.classList.add('hidden');
+  } else {
+    if (elements.btnExploreSubTarot) elements.btnExploreSubTarot.classList.remove('active');
+    if (elements.btnExploreSubWrapped) elements.btnExploreSubWrapped.classList.add('active');
+    if (elements.exploreSecTarot) elements.exploreSecTarot.classList.add('hidden');
+    if (elements.exploreSecWrapped) elements.exploreSecWrapped.classList.remove('hidden');
+  }
+  
+  renderActiveExploreSubTab();
+}
+
+function renderActiveExploreSubTab() {
+  if (appState.exploreActiveSubTab === 'tarot') {
+    if (appState.tarotHand.length === 0) {
+      reshuffleTarot();
+    } else {
+      renderTarotGrid();
+    }
+  } else if (appState.exploreActiveSubTab === 'wrapped') {
+    if (!appState.wrappedStats) {
+      calculateWrappedStats();
+    }
+    appState.wrappedCurrentSlide = 0;
+    renderWrappedStory();
+  }
+}
+
+function reshuffleTarot() {
+  let pool = appState.flatBookmarks.filter(b => b.type === 'bookmark');
+  if (pool.length === 0) {
+    if (elements.tarotCardsGrid) {
+      elements.tarotCardsGrid.innerHTML = `
+        <div style="grid-column: 1/-1; text-align: center; color: var(--text-secondary); padding: 2rem;">
+          Nessun preferito disponibile per i Tarocchi.
+        </div>
+      `;
+    }
+    return;
+  }
+  
+  if (appState.tarotPrioritizeOld) {
+    // Ordina per data (più vecchi prima)
+    pool = [...pool].sort((a, b) => {
+      const dA = a.rawAddDate ? new Date(a.rawAddDate).getTime() : 0;
+      const dB = b.rawAddDate ? new Date(b.rawAddDate).getTime() : 0;
+      return dA - dB;
+    });
+    // Limita la selezione alla metà dei più vecchi per un pizzico di randomicità focalizzata
+    const halfSize = Math.max(1, Math.ceil(pool.length / 2));
+    pool = pool.slice(0, halfSize);
+  }
+  
+  // Mescola il mazzo (Fisher-Yates)
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  
+  const count = Math.min(appState.tarotNumCards, pool.length);
+  const hand = [];
+  for (let i = 0; i < count; i++) {
+    hand.push({
+      bookmark: pool[i],
+      flipped: false
+    });
+  }
+  
+  appState.tarotHand = hand;
+  renderTarotGrid();
+}
+
+function renderTarotGrid() {
+  if (!elements.tarotCardsGrid) return;
+  elements.tarotCardsGrid.innerHTML = '';
+  
+  // Cambia il numero di colonne del grid in base alle carte
+  elements.tarotCardsGrid.style.display = 'grid';
+  elements.tarotCardsGrid.style.gridTemplateColumns = `repeat(auto-fit, minmax(220px, 1fr))`;
+  elements.tarotCardsGrid.style.maxWidth = appState.tarotNumCards === 3 ? '800px' : '1200px';
+  elements.tarotCardsGrid.style.gap = '1.75rem';
+  
+  appState.tarotHand.forEach((card, idx) => {
+    const cardEl = document.createElement('div');
+    cardEl.className = 'tarot-card animate-fade-in';
+    cardEl.style.animationDelay = `${idx * 0.1}s`;
+    if (card.flipped) {
+      cardEl.classList.add('flipped');
+    }
+    
+    const domain = getDomainFromUrl(card.bookmark.url);
+    const dateStr = card.bookmark.addDate ? card.bookmark.addDate : 'Data sconosciuta';
+    const folder = card.bookmark.folderPath && card.bookmark.folderPath.length > 0 
+      ? card.bookmark.folderPath[card.bookmark.folderPath.length - 1] 
+      : 'Radice';
+    const fullFolderPath = card.bookmark.folderPath && card.bookmark.folderPath.length > 0
+      ? card.bookmark.folderPath.join(' / ')
+      : 'Cartella Radice';
+      
+    cardEl.innerHTML = `
+      <div class="tarot-card-inner">
+        <div class="tarot-card-back">
+          <svg class="tarot-symbol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            <path stroke-linecap="round" fill="currentColor" d="M12 5l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5.5-1.5z" style="color: hsl(40, 80%, 55%);" />
+            <circle cx="7" cy="8" r="1.5" fill="currentColor" />
+            <circle cx="16" cy="15" r="1" fill="currentColor" />
+          </svg>
+          <div class="tarot-label-mystic">Lo Leggo Dopo</div>
+        </div>
+        <div class="tarot-card-front">
+          <div class="tarot-card-header">
+            <span class="tarot-card-folder" title="${escapeHTML(fullFolderPath)}">${escapeHTML(folder)}</span>
+            <span class="tarot-card-domain">${escapeHTML(domain)}</span>
+          </div>
+          <div class="tarot-card-body">
+            <div class="tarot-card-title" title="${escapeHTML(card.bookmark.title)}">${escapeHTML(card.bookmark.title)}</div>
+            <div class="tarot-card-date">Salvato: ${escapeHTML(dateStr)}</div>
+          </div>
+          <div class="tarot-card-actions">
+            <button type="button" class="btn btn-read btn-xs" data-idx="${idx}">Leggi Ora</button>
+            <button type="button" class="btn btn-postpone btn-xs" data-idx="${idx}">Rimanda</button>
+            <button type="button" class="btn btn-delete btn-xs" data-idx="${idx}">Elimina</button>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Click per girare la carta
+    cardEl.addEventListener('click', (e) => {
+      if (e.target.closest('.tarot-card-actions') || card.flipped) {
+        return;
+      }
+      card.flipped = true;
+      cardEl.classList.add('flipped');
+    });
+    
+    // Eventi pulsanti azione
+    const btnRead = cardEl.querySelector('.btn-read');
+    const btnPostpone = cardEl.querySelector('.btn-postpone');
+    const btnDelete = cardEl.querySelector('.btn-delete');
+    
+    btnRead.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.open(card.bookmark.url, '_blank');
+      showToast("Link aperto in una nuova scheda!");
+    });
+    
+    btnPostpone.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Rigira la carta sul dorso
+      card.flipped = false;
+      cardEl.classList.remove('flipped');
+      
+      // Aspetta che si rigiri prima di pescarne una nuova
+      setTimeout(() => {
+        drawNewTarotCard(idx);
+      }, 400);
+    });
+    
+    btnDelete.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (confirm(`Sei sicuro di voler eliminare definitivamente il preferito?\n"${card.bookmark.title}"`)) {
+        cardEl.classList.add('fade-out-delete');
+        setTimeout(() => {
+          deleteTarotCard(idx);
+        }, 600);
+      }
+    });
+    
+    elements.tarotCardsGrid.appendChild(cardEl);
+  });
+}
+
+function drawNewTarotCard(idx) {
+  let pool = appState.flatBookmarks.filter(b => b.type === 'bookmark');
+  // Escludi quelli già presenti in mano per evitare duplicati immediati
+  const urlsInHand = appState.tarotHand.map(c => c.bookmark.url);
+  pool = pool.filter(b => !urlsInHand.includes(b.url));
+  
+  if (pool.length === 0) {
+    showToast("Nessun altro preferito disponibile nel mazzo!");
+    return;
+  }
+  
+  if (appState.tarotPrioritizeOld) {
+    pool = [...pool].sort((a, b) => {
+      const dA = a.rawAddDate ? new Date(a.rawAddDate).getTime() : 0;
+      const dB = b.rawAddDate ? new Date(b.rawAddDate).getTime() : 0;
+      return dA - dB;
+    });
+    const halfSize = Math.max(1, Math.ceil(pool.length / 2));
+    pool = pool.slice(0, halfSize);
+  }
+  
+  // Pesca uno casuale dal pool rimasto
+  const newBookmark = pool[Math.floor(Math.random() * pool.length)];
+  appState.tarotHand[idx] = {
+    bookmark: newBookmark,
+    flipped: false
+  };
+  
+  renderTarotGrid();
+}
+
+function deleteTarotCard(idx) {
+  const cardToDelete = appState.tarotHand[idx];
+  
+  // 1. Rimuovi globalmente dal sistema
+  deleteBookmarkGlobally(cardToDelete.bookmark);
+  
+  // 2. Pesca un rimpiazzo
+  let pool = appState.flatBookmarks.filter(b => b.type === 'bookmark');
+  const urlsInHand = appState.tarotHand.map(c => c.bookmark.url);
+  pool = pool.filter(b => !urlsInHand.includes(b.url));
+  
+  if (pool.length === 0) {
+    // Non ci sono più preferiti, togli semplicemente la carta dalla mano
+    appState.tarotHand.splice(idx, 1);
+  } else {
+    if (appState.tarotPrioritizeOld) {
+      pool = [...pool].sort((a, b) => {
+        const dA = a.rawAddDate ? new Date(a.rawAddDate).getTime() : 0;
+        const dB = b.rawAddDate ? new Date(b.rawAddDate).getTime() : 0;
+        return dA - dB;
+      });
+      const halfSize = Math.max(1, Math.ceil(pool.length / 2));
+      pool = pool.slice(0, halfSize);
+    }
+    const newBookmark = pool[Math.floor(Math.random() * pool.length)];
+    appState.tarotHand[idx] = {
+      bookmark: newBookmark,
+      flipped: false
+    };
+  }
+  
+  showToast("Preferito eliminato con successo dal sistema!");
+  renderTarotGrid();
+}
+
+function deleteBookmarkFromTree(nodes, url, title) {
+  return nodes.filter(node => {
+    if (node.type === 'bookmark') {
+      return !(node.url === url && node.title === title);
+    } else if (node.type === 'folder' && node.children) {
+      node.children = deleteBookmarkFromTree(node.children, url, title);
+      return true;
+    }
+    return true;
+  });
+}
+
+function deleteBookmarkGlobally(bookmark) {
+  // 1. Rimuovi dall'albero gerarchico
+  appState.parsedTree = deleteBookmarkFromTree(appState.parsedTree, bookmark.url, bookmark.title);
+  // 2. Re-incolla la lista piatta
+  appState.flatBookmarks = flattenBookmarks(appState.parsedTree);
+  // 3. Aggiorna i filtrati
+  appState.filteredBookmarks = appState.filteredBookmarks.filter(b => !(b.url === bookmark.url && b.title === bookmark.title));
+  
+  // 4. Ricalcola le statistiche e la timeline
+  updateStats();
+  initTimeline();
+  
+  // 5. Ri-renderizza l'albero e la tabella
+  renderFolderTree();
+  applyFiltersAndRenderTable();
+  
+  // 6. Forza il ricalcolo del Wrapped
+  appState.wrappedStats = null;
+}
+
+function calculateWrappedStats() {
+  const bookmarks = appState.flatBookmarks.filter(b => b.type === 'bookmark');
+  const total = bookmarks.length;
+  
+  // 1. Domini Frequenti
+  const domainCounts = {};
+  bookmarks.forEach(b => {
+    const dom = getDomainFromUrl(b.url);
+    if (dom) domainCounts[dom] = (domainCounts[dom] || 0) + 1;
+  });
+  
+  const sortedDomains = Object.entries(domainCounts)
+    .map(([domain, count]) => ({
+      domain,
+      count,
+      pct: total > 0 ? Math.round((count / total) * 100) : 0
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+    
+  // 2. Analisi Orari
+  const hourCounts = { night: 0, morning: 0, afternoon: 0, evening: 0 };
+  let hasHours = false;
+  bookmarks.forEach(b => {
+    if (!b.rawAddDate) return;
+    const d = new Date(b.rawAddDate);
+    if (isNaN(d.getTime())) return;
+    hasHours = true;
+    const hr = d.getHours();
+    if (hr >= 0 && hr < 6) hourCounts.night++;
+    else if (hr >= 6 && hr < 12) hourCounts.morning++;
+    else if (hr >= 12 && hr < 18) hourCounts.afternoon++;
+    else hourCounts.evening++;
+  });
+  
+  let dominantTime = 'afternoon';
+  let maxTimeCount = 0;
+  Object.entries(hourCounts).forEach(([k, v]) => {
+    if (v > maxTimeCount) {
+      maxTimeCount = v;
+      dominantTime = k;
+    }
+  });
+  const timePct = total > 0 ? Math.round((maxTimeCount / total) * 100) : 0;
+  
+  // 3. Profondità
+  let maxDepth = 0;
+  let totalDepth = 0;
+  bookmarks.forEach(b => {
+    const depth = b.folderPath ? b.folderPath.length : 0;
+    totalDepth += depth;
+    if (depth > maxDepth) maxDepth = depth;
+  });
+  const avgDepth = total > 0 ? (totalDepth / total).toFixed(1) : '0';
+  
+  // 4. Parole Ricorrenti
+  const wordCounts = {};
+  const stopWords = new Set(['il', 'lo', 'la', 'i', 'gli', 'le', 'un', 'uno', 'una', 'di', 'a', 'da', 'in', 'con', 'su', 'per', 'tra', 'fra', 'e', 'o', 'se', 'che', 'non', 'del', 'dello', 'della', 'dei', 'degli', 'delle', 'al', 'allo', 'alla', 'ai', 'agli', 'alle', 'dal', 'dallo', 'dalla', 'dai', 'dagli', 'dalle', 'nel', 'nello', 'nella', 'nei', 'negli', 'nelle', 'sul', 'sullo', 'sulla', 'sui', 'sugli', 'sulle', 'per', 'con', 'ma', 'come', 'anche', 'questo', 'quello', 'mia', 'mio', 'tua', 'tuo', 'sua', 'suo', 'the', 'of', 'and', 'to', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'an', 'a', 'about', 'as', 'into', 'how', 'why', 'what', 'who', 'www', 'com', 'http', 'https']);
+  
+  bookmarks.forEach(b => {
+    if (!b.title) return;
+    const clean = b.title.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, " ");
+    const words = clean.split(/\s+/);
+    words.forEach(w => {
+      const cleanW = w.trim();
+      if (cleanW.length > 3 && !stopWords.has(cleanW) && isNaN(cleanW)) {
+        wordCounts[cleanW] = (wordCounts[cleanW] || 0) + 1;
+      }
+    });
+  });
+  
+  const sortedWords = Object.entries(wordCounts)
+    .map(([word, count]) => ({ word, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+    
+  // 5. Personality Profiler
+  const pCounts = { developer: 0, social: 0, culture: 0, shopping: 0, entertainment: 0, news: 0 };
+  let classified = 0;
+  
+  bookmarks.forEach(b => {
+    let matched = false;
+    const url = (b.url || '').toLowerCase();
+    const title = (b.title || '').toLowerCase();
+    
+    if (url.includes('github') || url.includes('gitlab') || url.includes('stackoverflow') || url.includes('npmjs') || url.includes('dev.to') || url.includes('medium.com') || url.includes('codepen') || url.includes('typescript') || url.includes('javascript') || title.includes('code') || title.includes('api') || title.includes('css') || title.includes('html') || title.includes('programming') || title.includes('git') || title.includes('react') || title.includes('angular') || title.includes('vue') || title.includes('node') || title.includes('python')) {
+      pCounts.developer++;
+      matched = true;
+    }
+    if (url.includes('reddit.com') || url.includes('twitter.com') || url.includes('x.com') || url.includes('facebook.com') || url.includes('instagram.com') || url.includes('tiktok.com') || url.includes('linkedin.com')) {
+      pCounts.social++;
+      matched = true;
+    }
+    if (url.includes('wikipedia.org') || url.includes('nature.com') || url.includes('arxiv.org') || url.includes('edu') || url.includes('coursera') || url.includes('udemy') || url.includes('school') || url.includes('science') || url.includes('history') || title.includes('ricerca') || title.includes('scienza') || title.includes('storia') || title.includes('corso') || title.includes('studio')) {
+      pCounts.culture++;
+      matched = true;
+    }
+    if (url.includes('amazon') || url.includes('ebay') || url.includes('aliexpress') || url.includes('etsy') || url.includes('shopping') || url.includes('store') || url.includes('shop') || url.includes('wishlist')) {
+      pCounts.shopping++;
+      matched = true;
+    }
+    if (url.includes('youtube.com') || url.includes('youtu.be') || url.includes('netflix.com') || url.includes('twitch.tv') || url.includes('spotify.com') || url.includes('imdb.com') || url.includes('games') || url.includes('playstation') || url.includes('steam')) {
+      pCounts.entertainment++;
+      matched = true;
+    }
+    if (url.includes('news') || url.includes('nyt') || url.includes('cnn') || url.includes('repubblica.it') || url.includes('corriere.it') || url.includes('tgcom') || url.includes('blog')) {
+      pCounts.news++;
+      matched = true;
+    }
+    if (matched) classified++;
+  });
+  
+  const div = classified || 1;
+  const percentages = {
+    developer: Math.round((pCounts.developer / div) * 100),
+    social: Math.round((pCounts.social / div) * 100),
+    culture: Math.round((pCounts.culture / div) * 100),
+    shopping: Math.round((pCounts.shopping / div) * 100),
+    entertainment: Math.round((pCounts.entertainment / div) * 100),
+    news: Math.round((pCounts.news / div) * 100)
+  };
+  
+  const sortedP = Object.entries(percentages).sort((a,b) => b[1] - a[1]);
+  const dominant = sortedP[0][0];
+  let archetype = '';
+  let archetypeDesc = '';
+  
+  switch(dominant) {
+    case 'developer':
+      archetype = "L'Eterno Studente del Codice 💻";
+      archetypeDesc = "La tua collezione è piena di repository Github, documentazione API e corsi di programmazione che prometti a te stesso di studiare 'il prossimo weekend'. Spoiler: non succederà mai, ma fa comodo averli salvati!";
+      break;
+    case 'social':
+      archetype = "Il Doomscroller Seriale delle Comunità Online 📱";
+      archetypeDesc = "Reddit, Twitter/X e altri social dominano la tua lista. Ami raccogliere thread infiniti di discussioni, meme e curiosità. Per te i preferiti sono un museo archeologico di discussioni internet.";
+      break;
+    case 'culture':
+      archetype = "Il Filosofo del 'Lo Leggo Dopo' 🧠";
+      archetypeDesc = "Wikipedia e articoli scientifici sono la tua passione. I tuoi preferiti assomigliano a una biblioteca accademica medievale. Sei affascinato dalla conoscenza, ma probabilmente hai letto solo l'indice.";
+      break;
+    case 'shopping':
+      archetype = "L'Accumulatore Impulsivo di Wishlist 🛍️";
+      archetypeDesc = "Hai decine di link ad Amazon, eBay e negozi online. I tuoi preferiti fungono da lettera a Babbo Natale virtuale permanente. Spesso salvi articoli sull'onda del momento, scordandotene il giorno dopo.";
+      break;
+    case 'entertainment':
+      archetype = "Il Critico di Poltrona di Livello Master 🎬";
+      archetypeDesc = "YouTube, Twitch, cinema e giochi. Il tuo tempo libero digitale è minuziosamente catalogato. Usi i preferiti per non perdere nessun video o film consigliato, accumulando giga di divertimento futuro.";
+      break;
+    case 'news':
+      archetype = "L'Informato Cronico (Futuro Opinionista) 📰";
+      archetypeDesc = "Giornali, notizie flash e blog di geopolitica o economia. Sei sempre sul pezzo e ami avere report dettagliati pronti alla mano per smentire qualcuno in una discussione nei commenti.";
+      break;
+    default:
+      archetype = "Il Collezionista Caotico del Web 🌀";
+      archetypeDesc = "La tua personalità web sfugge a qualsiasi classificazione standard! Il tuo archivio è un mix affascinante ed estremamente variegato di codice, notizie, acquisti e cultura generale. Un vero esploratore del web!";
+      break;
+  }
+  
+  appState.wrappedStats = {
+    total,
+    sortedDomains,
+    hourCounts,
+    dominantTime,
+    timePct,
+    hasHours,
+    maxDepth,
+    avgDepth,
+    sortedWords,
+    percentages,
+    archetype,
+    archetypeDesc
+  };
+}
+
+function renderWrappedStory() {
+  const container = elements.wrappedActiveSlideContainer;
+  const progressContainer = elements.wrappedStoryProgress;
+  const stats = appState.wrappedStats;
+  const slide = appState.wrappedCurrentSlide;
+  
+  if (!container || !progressContainer || !stats) return;
+  
+  // 1. Render progress bar segments
+  progressContainer.innerHTML = '';
+  for (let i = 0; i < 6; i++) {
+    const segment = document.createElement('div');
+    segment.className = 'wrapped-progress-segment';
+    if (i < slide) {
+      segment.classList.add('completed');
+    }
+    const fill = document.createElement('div');
+    fill.className = 'wrapped-progress-fill';
+    if (i === slide) {
+      segment.classList.add('active');
+      fill.style.width = '100%';
+      fill.style.transition = 'width 5s linear';
+    }
+    segment.appendChild(fill);
+    progressContainer.appendChild(segment);
+  }
+  
+  // 2. Render Slide content based on current index
+  container.innerHTML = '';
+  container.className = 'wrapped-slide-content wrapped-slide-fade';
+  
+  const wrapperStory = elements.exploreSecWrapped.querySelector('.wrapped-story-container');
+  
+  if (slide === 0) {
+    wrapperStory.style.background = 'linear-gradient(135deg, #120c1f 0%, #1a0f30 100%)';
+    container.innerHTML = `
+      <div style="text-align: center; padding: 1rem 0;">
+        <span style="font-size: 3.5rem; display: block; margin-bottom: 1.5rem; animation: bounce 2s infinite;">🔮</span>
+        <h2 style="font-size: 2rem; text-transform: uppercase; margin-bottom: 1.5rem; line-height: 1.3;">Il tuo Web Personality<br><span class="gradient-text">Wrapped</span></h2>
+        <p style="color: rgba(255,255,255,0.8); font-size: 1rem; line-height: 1.6; max-width: 400px; margin: 0 auto;">
+          Abbiamo analizzato i tuoi <strong>${stats.total} preferiti</strong> salvati nel browser. 
+          Scopriamo cosa dicono i link accumulati sulla tua vera personalità digitale...
+        </p>
+      </div>
+    `;
+  } else if (slide === 1) {
+    wrapperStory.style.background = 'linear-gradient(135deg, #7F00FF 0%, #FF007F 100%)';
+    
+    // Costruisci il chart delle personalità
+    const pRows = Object.entries(stats.percentages)
+      .filter(([_, val]) => val > 0)
+      .map(([key, val]) => {
+        const label = key.toUpperCase();
+        return `
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.25rem;">
+            <span>${label}</span>
+            <span>${val}%</span>
+          </div>
+        `;
+      }).join('');
+      
+    container.innerHTML = `
+      <div>
+        <span style="font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.7); display: block; margin-bottom: 0.5rem; font-weight: 700;">Il tuo Archetipo Digitale</span>
+        <div class="wrapped-personality-archetype">${escapeHTML(stats.archetype)}</div>
+        <p style="font-size: 0.95rem; line-height: 1.5; margin-bottom: 1.5rem; color: rgba(255,255,255,0.9); text-align: center; font-style: italic;">
+          "${escapeHTML(stats.archetypeDesc)}"
+        </p>
+        <div style="background: rgba(0,0,0,0.3); border-radius: 10px; padding: 1rem; border: 1px solid rgba(255,255,255,0.1);">
+          <span style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 0.75rem; color: rgba(255,255,255,0.8);">Composizione Profilo:</span>
+          ${pRows}
+        </div>
+      </div>
+    `;
+  } else if (slide === 2) {
+    wrapperStory.style.background = 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)';
+    
+    let domHtml = '';
+    stats.sortedDomains.forEach(dom => {
+      domHtml += `
+        <div class="wrapped-chart-bar-row">
+          <div class="wrapped-chart-label-row">
+            <span>${escapeHTML(dom.domain)}</span>
+            <span>${dom.count} link (${dom.pct}%)</span>
+          </div>
+          <div class="wrapped-chart-bar-bg">
+            <div class="wrapped-chart-bar-fill" style="width: ${dom.pct}%; background: #fff;"></div>
+          </div>
+        </div>
+      `;
+    });
+    
+    container.innerHTML = `
+      <div>
+        <span style="font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.7); display: block; margin-bottom: 0.5rem; font-weight: 700;">I tuoi Luoghi Frequenti</span>
+        <h3 style="margin-bottom: 1.5rem; font-size: 1.6rem;">I Domini più Salvati</h3>
+        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+          ${domHtml || '<p style="text-align: center; color: rgba(255,255,255,0.7);">Dati sui domini non disponibili.</p>'}
+        </div>
+      </div>
+    `;
+  } else if (slide === 3) {
+    wrapperStory.style.background = 'linear-gradient(135deg, #ff9966 0%, #ff5e62 100%)';
+    
+    let icon = '🌅';
+    let label = 'Mattiniero';
+    let comment = 'Ami catalogare link bevendo il caffè mattutino. Super organizzato fin dall\'alba!';
+    
+    if (stats.dominantTime === 'night') {
+      icon = '🦉';
+      label = 'Gufo della Notte';
+      comment = 'Salvi la maggior parte dei link nelle ore più tarde. Insonnia, codice notturno o sessioni di acquisti compulsivi a mezzanotte?';
+    } else if (stats.dominantTime === 'afternoon') {
+      icon = '⚡';
+      label = 'Produttività Pomeridiana';
+      comment = 'Raccogli informazioni durante le ore calde del lavoro o dello studio. Lavoratore infaticabile!';
+    } else if (stats.dominantTime === 'evening') {
+      icon = '🌙';
+      label = 'Relax Serale';
+      comment = 'Salvi link mentre ti rilassi sul divano dopo cena. I tuoi preferiti profumano di tempo libero.';
+    }
+    
+    container.innerHTML = `
+      <div style="text-align: center;">
+        <span style="font-size: 3.5rem; display: block; margin-bottom: 1rem;">${icon}</span>
+        <span style="font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.7); display: block; margin-bottom: 0.5rem; font-weight: 700;">Il tuo Ritmo di Salvataggio</span>
+        <h3 style="font-size: 1.8rem; margin-bottom: 1rem;">Sei un ${label}!</h3>
+        
+        ${stats.hasHours ? `
+          <p style="font-size: 1.1rem; font-weight: 500; margin-bottom: 1rem; color: #fff;">
+            Il <strong>${stats.timePct}%</strong> dei tuoi preferiti viene salvato in questa fascia.
+          </p>
+          <p style="font-size: 0.95rem; line-height: 1.5; color: rgba(255,255,255,0.85); max-width: 380px; margin: 0 auto;">
+            "${comment}"
+          </p>
+        ` : `
+          <p style="font-size: 0.95rem; color: rgba(255,255,255,0.85); max-width: 380px; margin: 0 auto;">
+            Gli orari di aggiunta non sono stati rilevati nel file caricato. Ti abbiamo comunque assegnato d'ufficio l'archetipo ${label} per simpatia!
+          </p>
+        `}
+      </div>
+    `;
+  } else if (slide === 4) {
+    wrapperStory.style.background = 'linear-gradient(135deg, #00c6ff 0%, #0072ff 100%)';
+    
+    let evaluation = '';
+    if (stats.maxDepth >= 5) {
+      evaluation = "<strong>Ingegnere dell'Archiviazione</strong>: Adori le scatole dentro le scatole. Per trovare un preferito serve una mappa speleologica. Ordine ossessivo o labirinto caotico?";
+    } else if (stats.maxDepth >= 2) {
+      evaluation = "<strong>Ordinato Equilibrato</strong>: Usi le cartelle con saggezza. Dividi per macro-argomenti senza impazzire in gerarchie bizantine.";
+    } else {
+      evaluation = "<strong>Minimalista Caotico</strong>: Cartelle? No, grazie! Metti tutto alla rinfusa nella root principale. Trovare un link è un vero atto di fede!";
+    }
+    
+    container.innerHTML = `
+      <div style="text-align: center;">
+        <span style="font-size: 3.5rem; display: block; margin-bottom: 1rem;">📂</span>
+        <span style="font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.7); display: block; margin-bottom: 0.5rem; font-weight: 700;">Struttura Cartelle</span>
+        <h3 style="font-size: 1.8rem; margin-bottom: 1.5rem;">L'Ingegnere dell'Archivio</h3>
+        
+        <div style="display: flex; justify-content: center; gap: 2rem; margin-bottom: 1.5rem;">
+          <div style="background: rgba(255,255,255,0.1); padding: 0.75rem 1.25rem; border-radius: 10px;">
+            <div style="font-size: 1.75rem; font-weight: 800;">${stats.maxDepth}</div>
+            <div style="font-size: 0.7rem; text-transform: uppercase; color: rgba(255,255,255,0.7);">Profondità Max</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.1); padding: 0.75rem 1.25rem; border-radius: 10px;">
+            <div style="font-size: 1.75rem; font-weight: 800;">${stats.avgDepth}</div>
+            <div style="font-size: 0.7rem; text-transform: uppercase; color: rgba(255,255,255,0.7);">Profondità Media</div>
+          </div>
+        </div>
+        
+        <p style="font-size: 0.95rem; line-height: 1.5; color: rgba(255,255,255,0.9); max-width: 400px; margin: 0 auto;">
+          ${evaluation}
+        </p>
+      </div>
+    `;
+  } else if (slide === 5) {
+    wrapperStory.style.background = 'linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)';
+    
+    let tagsHtml = '';
+    stats.sortedWords.forEach((wordObj, index) => {
+      tagsHtml += `
+        <span class="wrapped-tag wrapped-tag-size-${index + 1}">${escapeHTML(wordObj.word)}</span>
+      `;
+    });
+    
+    container.innerHTML = `
+      <div style="text-align: center;">
+        <span style="font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.7); display: block; margin-bottom: 0.5rem; font-weight: 700;">Le tue Ossessioni Tematiche</span>
+        <h3 style="font-size: 1.6rem; margin-bottom: 1rem;">Parole Chiave Ricorrenti</h3>
+        <p style="font-size: 0.85rem; color: rgba(255,255,255,0.7); margin-bottom: 1.5rem;">
+          Questi sono i termini che appaiono più spesso nei titoli dei tuoi preferiti.
+        </p>
+        <div class="wrapped-tags-cloud">
+          ${tagsHtml || '<p style="color: rgba(255,255,255,0.7);">Nessuna parola chiave estratta.</p>'}
+        </div>
+      </div>
+    `;
+  }
+  
+  // 3. Update counter text
+  if (elements.wrappedSlideCounter) {
+    elements.wrappedSlideCounter.textContent = `Slide ${slide + 1} di 6`;
+  }
+}
+
+function navigateWrappedSlide(dir) {
+  let nextSlide = appState.wrappedCurrentSlide + dir;
+  if (nextSlide < 0) nextSlide = 0;
+  if (nextSlide > 5) nextSlide = 5;
+  
+  appState.wrappedCurrentSlide = nextSlide;
+  renderWrappedStory();
+}
+
+function copyWrappedReport() {
+  const stats = appState.wrappedStats;
+  if (!stats) return;
+  
+  let reportText = `📊 **Mio Bookmarks Wrapped 2026** 📊\n\n`;
+  reportText += `🔮 Archetipo Digitale: *${stats.archetype}*\n`;
+  reportText += `🔗 Totale Preferiti Salvati: ${stats.total}\n\n`;
+  
+  reportText += `🏆 Top 3 Domini di Riferimento:\n`;
+  stats.sortedDomains.slice(0, 3).forEach((dom, i) => {
+    reportText += `  ${i+1}. ${dom.domain} (${dom.pct}%)\n`;
+  });
+  reportText += `\n`;
+  
+  if (stats.hasHours) {
+    let rhythm = 'Mattiniero 🌅';
+    if (stats.dominantTime === 'night') rhythm = 'Gufo della Notte 🦉';
+    else if (stats.dominantTime === 'afternoon') rhythm = 'Produttività Pomeridiana ⚡';
+    else if (stats.dominantTime === 'evening') rhythm = 'Relax Serale 🌙';
+    reportText += `⏱️ Ritmo di Salvataggio: *${rhythm}* (${stats.timePct}% dei link)\n`;
+  }
+  
+  reportText += `📁 Livelli di Cartelle Max: ${stats.maxDepth}\n`;
+  
+  if (stats.sortedWords.length > 0) {
+    reportText += `🏷️ Parole Chiave Ossessione: ${stats.sortedWords.map(w => w.word).join(', ')}\n`;
+  }
+  
+  reportText += `\nScopri la tua personalità con Bookmarks Tools! 🚀`;
+  
+  navigator.clipboard.writeText(reportText).then(() => {
+    showToast("Report copiato negli appunti! Condividilo con i tuoi amici.");
+  }).catch(err => {
+    console.error("Impossibile copiare il report:", err);
+  });
+}
+
+function getDomainFromUrl(url) {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname.replace('www.', '');
+  } catch (e) {
+    return url;
   }
 }
 

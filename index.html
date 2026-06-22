@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=1.0.2">
   <!-- D3.js per Grafici e Mappe Mentali -->
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <!-- QRious per generazione QR Code lato client -->
@@ -49,6 +49,12 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
         </svg>
         <span>Confronta</span>
+      </button>
+      <button type="button" class="btn-tab-mode" id="mode-explore-tab">
+        <svg class="icon-small" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19a7 7 0 100-14 7 7 0 000 14zm0 0v-2m0-10V5M5 12H3m14 0h2m-9-4l3 3m-3 3l-3-3" />
+        </svg>
+        <span>Esplora</span>
       </button>
     </div>
     
@@ -568,6 +574,117 @@
           </section>
 
         </div>
+      </div>
+    </div>
+
+    <!-- Sezione Esplora (Visibile in modalità esplora) -->
+    <div class="results-wrapper hidden" id="explore-results-container">
+      
+      <!-- Placeholder quando non ci sono preferiti caricati -->
+      <section class="card glass text-center animate-fade-in" id="explore-placeholder" style="max-width: 600px; margin: 2rem auto; text-align: center; padding: 3rem 2rem;">
+        <div class="stat-icon-wrapper b-violet" style="margin: 0 auto 1.5rem auto; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">
+          <svg class="icon-small" style="width: 32px; height: 32px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 9.172V5L8 4z" />
+          </svg>
+        </div>
+        <h3 style="font-family: var(--font-title); font-size: 1.5rem; margin-bottom: 1rem;">Nessun dato caricato</h3>
+        <p class="card-desc" style="margin-bottom: 2rem; max-width: 450px; margin-left: auto; margin-right: auto;">Carica un file dei preferiti nella sezione <strong>Converti</strong> oppure clicca sul pulsante qui sotto per iniziare subito con dei dati di esempio.</p>
+        <button type="button" class="btn btn-gradient btn-large" id="btn-explore-load-example">Carica Dati di Esempio</button>
+      </section>
+
+      <!-- Contenuto effettivo di Esplora (mostrato se ci sono preferiti caricati) -->
+      <div id="explore-content" class="hidden">
+        
+        <!-- Navigazione interna Sotto-Tab Esplora -->
+        <div class="content-tabs-nav glass" style="margin-bottom: 1.5rem; justify-content: center; max-width: 600px; margin-left: auto; margin-right: auto; padding: 0.25rem; border-radius: 12px; display: flex;">
+          <button type="button" class="btn btn-tab active" id="btn-explore-sub-tarot" data-subtab="tarot" style="flex: 1; text-align: center; border-bottom: none; border-radius: 8px;">
+            <span>🃏 Tarocchi dei Preferiti</span>
+          </button>
+          <button type="button" class="btn btn-tab" id="btn-explore-sub-wrapped" data-subtab="wrapped" style="flex: 1; text-align: center; border-bottom: none; border-radius: 8px;">
+            <span>📊 Personality Wrapped</span>
+          </button>
+        </div>
+
+        <!-- SOTTO-SEZIONE 1: TAROCCHI DEI PREFERITI -->
+        <section class="card glass animate-fade-in" id="explore-sec-tarot" style="margin-bottom: 2rem;">
+          <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div>
+              <h3>🃏 Tarocchi dei Preferiti</h3>
+              <p class="card-desc">Smalisci la tua sindrome del "Lo leggo dopo" girando le carte e riscoprendo link dimenticati.</p>
+            </div>
+            
+            <!-- Controlli Tarocchi -->
+            <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+              <div class="option-item" style="display: flex; align-items: center; gap: 0.5rem;">
+                <label for="opt-tarot-count" class="select-label" style="font-size: 0.85rem; margin-bottom: 0;">Carte:</label>
+                <select id="opt-tarot-count" class="select-control" style="padding: 0.3rem 0.5rem; font-size: 0.85rem;">
+                  <option value="3" selected>3 Carte</option>
+                  <option value="5">5 Carte</option>
+                </select>
+              </div>
+              <div class="option-item" style="display: flex; align-items: center;">
+                <label class="switch-container" style="margin-bottom: 0; font-size: 0.85rem;" title="Mostra preferiti salvati da più tempo">
+                  <input type="checkbox" id="opt-tarot-old" checked>
+                  <span class="switch-slider"></span>
+                  <span class="switch-label">Prediligi più vecchi</span>
+                </label>
+              </div>
+              <button type="button" class="btn btn-primary btn-small" id="btn-tarot-reshuffle">
+                <svg class="icon-small" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89H18v3.54" />
+                </svg>
+                <span>Mischia Mazzo</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Contenitore Carte -->
+          <div class="tarot-deck-wrapper" style="min-height: 400px; display: flex; align-items: center; justify-content: center; padding: 2rem 0;">
+            <div id="tarot-cards-grid" class="tarot-grid">
+              <!-- Generate da JS -->
+            </div>
+          </div>
+        </section>
+
+        <!-- SOTTO-SEZIONE 2: SPOTIFY WRAPPED -->
+        <section class="card glass animate-fade-in hidden" id="explore-sec-wrapped" style="margin-bottom: 2rem; max-width: 650px; margin-left: auto; margin-right: auto; padding: 0;">
+          <div class="wrapped-story-container" style="position: relative; overflow: hidden; border-radius: 16px; background: #000; min-height: 520px; display: flex; flex-direction: column; justify-content: space-between; padding: 2.5rem 2rem 2rem 2rem;">
+            
+            <!-- Indicatori barra progresso in alto -->
+            <div class="wrapped-progress-bar" id="wrapped-story-progress">
+              <!-- Generati da JS -->
+            </div>
+
+            <!-- Slide Content (Contenuto Dinamico delle slide, gestito da JS) -->
+            <div class="wrapped-slide-content" id="wrapped-active-slide-container" style="flex: 1; display: flex; flex-direction: column; justify-content: center; margin-top: 1rem; margin-bottom: 1.5rem;">
+              <!-- Generato da JS -->
+            </div>
+
+            <!-- Controlli Storia in Basso -->
+            <div class="wrapped-story-footer" style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+              <button type="button" class="btn btn-outline btn-xs" id="btn-wrapped-prev" style="border-radius: 20px; padding: 0.5rem 1rem;">
+                &larr; Indietro
+              </button>
+              <div id="wrapped-slide-counter" style="font-size: 0.8rem; color: rgba(255,255,255,0.5); font-weight: 500;">
+                Slide 1 di 6
+              </div>
+              <button type="button" class="btn btn-primary btn-xs" id="btn-wrapped-next" style="border-radius: 20px; padding: 0.5rem 1rem;">
+                Avanti &rarr;
+              </button>
+            </div>
+          </div>
+
+          <!-- Sezione Copia Report Condivisione sotto la storia -->
+          <div style="padding: 1.5rem; text-align: center; border-top: 1px solid var(--border-color); display: flex; justify-content: center; gap: 1rem;">
+            <button type="button" class="btn btn-outline" id="btn-wrapped-copy-report">
+              <svg class="icon-small" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
+              </svg>
+              <span>Copia Report per Condividere</span>
+            </button>
+          </div>
+        </section>
+
       </div>
     </div>
 
