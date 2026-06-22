@@ -281,6 +281,64 @@
         </div>
       </section>
 
+      <!-- Sezione: La Macchina del Tempo (Timeline Nostalgia) -->
+      <section class="card glass timeline-card animate-fade-in collapsed" id="sec-timeline" style="margin-bottom: 1.5rem; display: none;">
+        <div class="card-header timeline-header-flex" id="timeline-header" style="cursor: pointer;">
+          <div class="timeline-title-desc">
+            <h3 style="margin: 0; font-family: var(--font-title); font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+              <span>⏳ La Macchina del Tempo</span>
+              <span class="badge badge-premium">Nostalgia</span>
+            </h3>
+            <p class="card-desc" style="margin: 0.25rem 0 0 0;">Viaggia nel tempo tra i tuoi vecchi interessi. Filtra i preferiti isolando quelli salvati in un preciso periodo.</p>
+          </div>
+          <div class="timeline-controls-header" style="display: flex; align-items: center; gap: 0.75rem;">
+            <button type="button" class="btn btn-small btn-outline" id="btn-timeline-toggle-mode">
+              Attiva Filtro Temporale
+            </button>
+            <button type="button" class="btn btn-xs btn-outline" id="btn-timeline-toggle-expand" style="padding: 0.4rem; height: 32px; width: 32px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px;" title="Espandi/Riduci la timeline">
+              <svg id="timeline-expand-icon" class="icon-xs" style="transition: transform 0.3s ease; width: 16px; height: 16px; transform: rotate(-90deg);" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="timeline-interactive-container" id="timeline-interactive-container">
+          <div class="timeline-stats-row">
+            <div class="timeline-selected-period">
+              Periodo selezionato: <strong id="timeline-period-display">—</strong>
+            </div>
+            <div class="timeline-bookmark-count">
+              Preferiti salvati: <span class="badge b-pink" id="timeline-count-display">0</span>
+            </div>
+          </div>
+
+          <!-- Anteprima del grafico (istogramma delle attività temporali) -->
+          <div class="timeline-chart-container" id="timeline-chart">
+            <!-- Disegnato tramite JS -->
+          </div>
+
+          <!-- Slider della timeline -->
+          <div class="timeline-slider-wrapper">
+            <input type="range" id="timeline-slider" min="0" max="0" value="0" class="timeline-slider" disabled>
+            <div class="timeline-ticks" id="timeline-ticks"></div>
+          </div>
+
+          <!-- Pulsanti di controllo navigazione automatica (Play / Pause, avanti, indietro) -->
+          <div class="timeline-player-controls">
+            <button type="button" class="btn btn-xs btn-outline" id="btn-timeline-prev" disabled>&larr; Mese Prec.</button>
+            <button type="button" class="btn btn-xs btn-outline" id="btn-timeline-play" disabled>
+              <svg class="icon-xs" style="width: 14px; height: 14px; margin-right: 4px; vertical-align: middle;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Play</span>
+            </button>
+            <button type="button" class="btn btn-xs btn-outline" id="btn-timeline-next" disabled>Mese Succ. &rarr;</button>
+          </div>
+        </div>
+      </section>
+
       <!-- Layout Esploratore Principale: Sidebar Albero + Tabella Dati -->
       <div class="dashboard-layout">
         

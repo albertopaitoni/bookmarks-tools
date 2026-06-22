@@ -55,6 +55,13 @@ let appState = {
   compareItemsPerPage: 15,
   compareSearchQuery: '',
   compareExportFormat: 'json', // json, csv, markdown
+
+  // La Macchina del Tempo (Timeline Nostalgia)
+  timelineActive: false,
+  timelineRange: [],
+  timelineSelectedIndex: -1,
+  timelinePlaying: false,
+  timelineInterval: null,
 };
 
 // --- DOM ELEMENTS ---
@@ -206,6 +213,18 @@ const elements = {
   qrCanvas: document.getElementById('qr-canvas'),
   btnQrCopyUrl: document.getElementById('btn-qr-copy-url'),
   btnQrDownload: document.getElementById('btn-qr-download'),
+  
+  // La Macchina del Tempo (Timeline Nostalgia)
+  secTimeline: document.getElementById('sec-timeline'),
+  btnTimelineToggleMode: document.getElementById('btn-timeline-toggle-mode'),
+  timelinePeriodDisplay: document.getElementById('timeline-period-display'),
+  timelineCountDisplay: document.getElementById('timeline-count-display'),
+  timelineChart: document.getElementById('timeline-chart'),
+  timelineSlider: document.getElementById('timeline-slider'),
+  timelineTicks: document.getElementById('timeline-ticks'),
+  btnTimelinePrev: document.getElementById('btn-timeline-prev'),
+  btnTimelinePlay: document.getElementById('btn-timeline-play'),
+  btnTimelineNext: document.getElementById('btn-timeline-next'),
 };
 
 // --- INIZIALIZZAZIONE ---
@@ -575,6 +594,24 @@ function setupEventListeners() {
   elements.btnGraphReset.addEventListener('click', () => {
     graphResetZoom();
   });
+
+  // La Macchina del Tempo Event Listeners
+  if (elements.btnTimelineToggleMode) {
+    elements.btnTimelineToggleMode.addEventListener('click', toggleTimelineMode);
+  }
+  if (elements.timelineSlider) {
+    elements.timelineSlider.addEventListener('input', handleTimelineSliderInput);
+    elements.timelineSlider.addEventListener('change', handleTimelineSliderChange);
+  }
+  if (elements.btnTimelinePrev) {
+    elements.btnTimelinePrev.addEventListener('click', () => navigateTimeline(-1));
+  }
+  if (elements.btnTimelineNext) {
+    elements.btnTimelineNext.addEventListener('click', () => navigateTimeline(1));
+  }
+  if (elements.btnTimelinePlay) {
+    elements.btnTimelinePlay.addEventListener('click', toggleTimelinePlay);
+  }
 }
 
 // --- LOGICA DI CONTROLLO INTERFACCIA ---
@@ -735,6 +772,9 @@ function processBookmarksData(shouldScroll = true) {
       computeFolderCounts(appState.parsedTree);
       
       appState.flatBookmarks = flattenBookmarks(appState.parsedTree);
+      
+      // Inizializza La Macchina del Tempo (Timeline Nostalgia)
+      initTimeline();
       
       // 3. Calcolo e aggiornamento statistiche
       updateStats();
@@ -1178,6 +1218,19 @@ function applyFiltersAndRenderTable() {
       b.url.toLowerCase().includes(q) || 
       b.folderPath.join(' / ').toLowerCase().includes(q)
     );
+  }
+
+  // 3. Filtro temporale (La Macchina del Tempo)
+  if (appState.timelineActive && appState.timelineSelectedIndex >= 0) {
+    const activePeriod = appState.timelineRange[appState.timelineSelectedIndex];
+    if (activePeriod) {
+      result = result.filter(b => {
+        if (!b.rawAddDate) return false;
+        const d = new Date(b.rawAddDate);
+        if (isNaN(d.getTime())) return false;
+        return d.getFullYear() === activePeriod.year && (d.getMonth() + 1) === activePeriod.month;
+      });
+    }
   }
   
   // 3. Ordinamento
@@ -1688,7 +1741,10 @@ function formatTreeDates(nodes, formatType) {
   return nodes.map(node => {
     const formattedNode = { ...node };
     if (formattedNode.type === 'bookmark') {
-      formattedNode.addDate = formatSingleDate(formattedNode.addDate, formatType);
+      if (!formattedNode.rawAddDate) {
+        formattedNode.rawAddDate = node.rawAddDate || node.addDate;
+      }
+      formattedNode.addDate = formatSingleDate(formattedNode.rawAddDate, formatType);
     } else if (formattedNode.type === 'folder' && formattedNode.children) {
       formattedNode.children = formatTreeDates(formattedNode.children, formatType);
     }
@@ -2415,4 +2471,358 @@ function openQRModal(url, title) {
 function closeQRModal() {
   if (elements.qrModal) elements.qrModal.classList.remove('active');
 }
+
+// --- LA MACCHINA DEL TEMPO (TIMELINE NOSTALGIA) ---
+
+function initTimeline() {
+  const bookmarksWithDates = appState.flatBookmarks.filter(b => b.rawAddDate);
+  
+  if (bookmarksWithDates.length === 0) {
+    if (elements.secTimeline) elements.secTimeline.style.display = 'none';
+    appState.timelineActive = false;
+    appState.timelineRange = [];
+    appState.timelineSelectedIndex = -1;
+    stopTimelinePlay();
+    return;
+  }
+  
+  const dateGroups = {};
+  bookmarksWithDates.forEach(b => {
+    const d = new Date(b.rawAddDate);
+    if (isNaN(d.getTime())) return;
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1; // 1-indexed
+    const key = `${year}-${String(month).padStart(2, '0')}`;
+    if (!dateGroups[key]) {
+      dateGroups[key] = {
+        key,
+        year,
+        month,
+        count: 0
+      };
+    }
+    dateGroups[key].count++;
+  });
+  
+  const keys = Object.keys(dateGroups).sort();
+  if (keys.length === 0) {
+    if (elements.secTimeline) elements.secTimeline.style.display = 'none';
+    appState.timelineActive = false;
+    appState.timelineRange = [];
+    appState.timelineSelectedIndex = -1;
+    stopTimelinePlay();
+    return;
+  }
+  
+  const firstKey = keys[0];
+  const lastKey = keys[keys.length - 1];
+  
+  const [startYear, startMonth] = firstKey.split('-').map(Number);
+  const [endYear, endMonth] = lastKey.split('-').map(Number);
+  
+  const monthsList = [
+    'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+    'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
+  ];
+  
+  const fullRange = [];
+  let currYear = startYear;
+  let currMonth = startMonth;
+  
+  while (currYear < endYear || (currYear === endYear && currMonth <= endMonth)) {
+    const key = `${currYear}-${String(currMonth).padStart(2, '0')}`;
+    const count = dateGroups[key] ? dateGroups[key].count : 0;
+    fullRange.push({
+      key,
+      year: currYear,
+      month: currMonth,
+      label: `${monthsList[currMonth - 1]} ${currYear}`,
+      count
+    });
+    
+    currMonth++;
+    if (currMonth > 12) {
+      currMonth = 1;
+      currYear++;
+    }
+  }
+  
+  appState.timelineRange = fullRange;
+  // Default: seleziona il primo mese in cui ci sono preferiti salvati, o l'ultimo se si preferisce.
+  // Trova il primo mese non vuoto
+  const firstNonEmptyIdx = fullRange.findIndex(r => r.count > 0);
+  appState.timelineSelectedIndex = firstNonEmptyIdx >= 0 ? firstNonEmptyIdx : 0;
+  
+  // Resetta stato attivo
+  appState.timelineActive = false;
+  if (elements.btnTimelineToggleMode) {
+    elements.btnTimelineToggleMode.classList.remove('active');
+    elements.btnTimelineToggleMode.textContent = 'Attiva Filtro Temporale';
+  }
+  stopTimelinePlay();
+  
+  // Rendi visibile
+  if (elements.secTimeline) elements.secTimeline.style.display = 'block';
+  
+  renderTimelineUI();
+}
+
+function renderTimelineUI() {
+  const range = appState.timelineRange;
+  if (!range || range.length === 0) return;
+  
+  // Configura lo slider
+  if (elements.timelineSlider) {
+    elements.timelineSlider.min = 0;
+    elements.timelineSlider.max = range.length - 1;
+    elements.timelineSlider.value = appState.timelineSelectedIndex;
+    elements.timelineSlider.disabled = !appState.timelineActive;
+  }
+  
+  // Configura i pulsanti player
+  if (appState.timelineActive) {
+    if (elements.btnTimelinePrev) elements.btnTimelinePrev.disabled = appState.timelineSelectedIndex <= 0;
+    if (elements.btnTimelineNext) elements.btnTimelineNext.disabled = appState.timelineSelectedIndex >= range.length - 1;
+    if (elements.btnTimelinePlay) elements.btnTimelinePlay.disabled = false;
+  } else {
+    if (elements.btnTimelinePrev) elements.btnTimelinePrev.disabled = true;
+    if (elements.btnTimelineNext) elements.btnTimelineNext.disabled = true;
+    if (elements.btnTimelinePlay) elements.btnTimelinePlay.disabled = true;
+  }
+  
+  // Renderizza istogramma
+  if (elements.timelineChart) {
+    elements.timelineChart.innerHTML = '';
+    const maxCount = Math.max(...range.map(r => r.count), 1);
+    
+    range.forEach((item, idx) => {
+      const bar = document.createElement('div');
+      bar.className = 'timeline-chart-bar';
+      if (appState.timelineSelectedIndex === idx && appState.timelineActive) {
+        bar.classList.add('active');
+      }
+      
+      // Calcola l'altezza percentuale
+      const pct = (item.count / maxCount) * 100;
+      bar.style.height = `${Math.max(pct, item.count > 0 ? 8 : 2)}%`;
+      
+      // Colore speciale per indicare densità
+      if (item.count > 0) {
+        bar.style.backgroundColor = `hsla(263, 84%, ${Math.min(50 + pct/2, 75)}%, ${0.4 + (pct/100)*0.5})`;
+      }
+      
+      bar.setAttribute('data-tooltip', `${item.label}: ${item.count} preferiti`);
+      
+      // Seleziona al click
+      bar.addEventListener('click', () => {
+        if (!appState.timelineActive) {
+          toggleTimelineMode();
+        }
+        selectTimelineIndex(idx);
+      });
+      
+      elements.timelineChart.appendChild(bar);
+    });
+  }
+  
+  // Tick temporali
+  if (elements.timelineTicks) {
+    elements.timelineTicks.innerHTML = '';
+    
+    const yearsAdded = new Set();
+    // Calcola quanti anni ci sono nel range
+    const allYears = Array.from(new Set(range.map(r => r.year)));
+    
+    // Decidi il passo ideale per mostrare le etichette degli anni
+    let step = 1;
+    if (allYears.length > 10) step = 2;
+    if (allYears.length > 20) step = 5;
+    
+    range.forEach((item, idx) => {
+      // Mostra l'anno al cambio d'anno o ai limiti
+      if (!yearsAdded.has(item.year) && item.month === 1) {
+        const yearIdx = allYears.indexOf(item.year);
+        if (yearIdx % step === 0 || idx === 0 || idx === range.length - 1) {
+          const tick = document.createElement('span');
+          tick.className = 'timeline-tick-label';
+          tick.style.cursor = 'pointer';
+          tick.textContent = String(item.year);
+          tick.addEventListener('click', () => {
+            if (!appState.timelineActive) {
+              toggleTimelineMode();
+            }
+            selectTimelineIndex(idx);
+          });
+          elements.timelineTicks.appendChild(tick);
+          yearsAdded.add(item.year);
+        }
+      }
+    });
+    
+    // Assicurati che ci sia almeno un tick per l'inizio e uno per la fine se vuoto
+    if (elements.timelineTicks.children.length === 0 && range.length > 0) {
+      const firstTick = document.createElement('span');
+      firstTick.className = 'timeline-tick-label';
+      firstTick.textContent = range[0].label;
+      elements.timelineTicks.appendChild(firstTick);
+      
+      if (range.length > 1) {
+        const lastTick = document.createElement('span');
+        lastTick.className = 'timeline-tick-label';
+        lastTick.textContent = range[range.length - 1].label;
+        elements.timelineTicks.appendChild(lastTick);
+      }
+    }
+  }
+  
+  updateTimelinePeriodDisplay();
+}
+
+function updateTimelinePeriodDisplay() {
+  const idx = appState.timelineSelectedIndex;
+  const range = appState.timelineRange;
+  
+  if (idx < 0 || !range || range[idx] === undefined) {
+    if (elements.timelinePeriodDisplay) elements.timelinePeriodDisplay.textContent = '—';
+    if (elements.timelineCountDisplay) elements.timelineCountDisplay.textContent = '0';
+    return;
+  }
+  
+  const period = range[idx];
+  if (elements.timelinePeriodDisplay) elements.timelinePeriodDisplay.textContent = period.label;
+  if (elements.timelineCountDisplay) elements.timelineCountDisplay.textContent = String(period.count);
+}
+
+function toggleTimelineMode() {
+  appState.timelineActive = !appState.timelineActive;
+  
+  if (elements.btnTimelineToggleMode) {
+    if (appState.timelineActive) {
+      elements.btnTimelineToggleMode.classList.add('active');
+      elements.btnTimelineToggleMode.textContent = 'Filtro Temporale Attivo';
+    } else {
+      elements.btnTimelineToggleMode.classList.remove('active');
+      elements.btnTimelineToggleMode.textContent = 'Attiva Filtro Temporale';
+      stopTimelinePlay();
+    }
+  }
+  
+  // Abilita/disabilita lo slider
+  if (elements.timelineSlider) {
+    elements.timelineSlider.disabled = !appState.timelineActive;
+  }
+  
+  // Aggiorna controlli ed esegui filtri
+  selectTimelineIndex(appState.timelineSelectedIndex >= 0 ? appState.timelineSelectedIndex : 0);
+}
+
+function selectTimelineIndex(idx) {
+  if (idx < 0 || !appState.timelineRange || idx >= appState.timelineRange.length) return;
+  
+  appState.timelineSelectedIndex = idx;
+  
+  // Sincronizza lo slider
+  if (elements.timelineSlider) {
+    elements.timelineSlider.value = idx;
+  }
+  
+  // Sincronizza stato pulsanti
+  if (appState.timelineActive) {
+    if (elements.btnTimelinePrev) elements.btnTimelinePrev.disabled = idx <= 0;
+    if (elements.btnTimelineNext) elements.btnTimelineNext.disabled = idx >= appState.timelineRange.length - 1;
+  }
+  
+  // Aggiorna classi barre istogramma
+  if (elements.timelineChart) {
+    const bars = elements.timelineChart.children;
+    for (let i = 0; i < bars.length; i++) {
+      if (i === idx && appState.timelineActive) {
+        bars[i].classList.add('active');
+        // Scorri istogramma per tenere la barra visibile se ci fosse uno scroll
+        bars[i].scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' });
+      } else {
+        bars[i].classList.remove('active');
+      }
+    }
+  }
+  
+  updateTimelinePeriodDisplay();
+  
+  // Ricarica la tabella
+  appState.currentPage = 1;
+  applyFiltersAndRenderTable();
+}
+
+function handleTimelineSliderInput(e) {
+  const idx = parseInt(e.target.value);
+  selectTimelineIndex(idx);
+}
+
+function handleTimelineSliderChange(e) {
+  const idx = parseInt(e.target.value);
+  selectTimelineIndex(idx);
+}
+
+function navigateTimeline(direction) {
+  const targetIdx = appState.timelineSelectedIndex + direction;
+  if (targetIdx >= 0 && targetIdx < appState.timelineRange.length) {
+    selectTimelineIndex(targetIdx);
+  }
+}
+
+function toggleTimelinePlay() {
+  if (appState.timelinePlaying) {
+    stopTimelinePlay();
+  } else {
+    startTimelinePlay();
+  }
+}
+
+function startTimelinePlay() {
+  if (appState.timelineRange.length === 0) return;
+  
+  appState.timelinePlaying = true;
+  if (elements.btnTimelinePlay) {
+    elements.btnTimelinePlay.innerHTML = `
+      <svg class="icon-xs" style="width: 14px; height: 14px; margin-right: 4px; vertical-align: middle;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <span>Pause</span>
+    `;
+    elements.btnTimelinePlay.classList.add('active');
+  }
+  
+  // Se siamo alla fine o oltre, ripartiamo da capo o dal primo mese con preferiti
+  if (appState.timelineSelectedIndex >= appState.timelineRange.length - 1) {
+    const firstNonEmptyIdx = appState.timelineRange.findIndex(r => r.count > 0);
+    selectTimelineIndex(firstNonEmptyIdx >= 0 ? firstNonEmptyIdx : 0);
+  }
+  
+  appState.timelineInterval = setInterval(() => {
+    if (appState.timelineSelectedIndex < appState.timelineRange.length - 1) {
+      navigateTimeline(1);
+    } else {
+      stopTimelinePlay();
+    }
+  }, 1000); // 1 secondo per step
+}
+
+function stopTimelinePlay() {
+  appState.timelinePlaying = false;
+  if (appState.timelineInterval) {
+    clearInterval(appState.timelineInterval);
+    appState.timelineInterval = null;
+  }
+  if (elements.btnTimelinePlay) {
+    elements.btnTimelinePlay.innerHTML = `
+      <svg class="icon-xs" style="width: 14px; height: 14px; margin-right: 4px; vertical-align: middle;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <span>Play</span>
+    `;
+    elements.btnTimelinePlay.classList.remove('active');
+  }
+}
+
 
