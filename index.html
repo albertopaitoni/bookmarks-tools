@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="LinkCascade: Converti e analizza i tuoi preferiti HTML esportati da qualsiasi browser (Chrome, Safari, Firefox, DuckDuckGo) in formati strutturati come JSON, CSV, Markdown e query SQL.">
+  <title>LinkCascade - Convertitore Premium di Preferiti HTML</title>
+  <!-- Google Fonts: Outfit per intestazioni, Inter per testo normale -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Background Decorative Orbs for Glowing Aesthetics -->
+  <div class="glow-orb orb-1" aria-hidden="true"></div>
+  <div class="glow-orb orb-2" aria-hidden="true"></div>
+  <div class="glow-orb orb-3" aria-hidden="true"></div>
+
+  <header class="app-header">
+    <div class="header-container">
+      <div class="logo-wrapper">
+        <svg class="logo-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+        <span class="logo-text">Link<span class="gradient-text">Cascade</span></span>
+      </div>
+      <p class="header-subtitle">Trasforma i file preferiti HTML in array strutturati, alberi JSON, matrici CSV, liste Markdown e tabelle SQL</p>
+    </div>
+  </header>
+
+  <main class="app-container">
+    
+    <!-- Selettore della Modalità Principale -->
+    <div class="app-mode-tabs glass">
+      <button type="button" class="btn-tab-mode active" id="mode-convert-tab">
+        <svg class="icon-small" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+        </svg>
+        <span>Convertitore</span>
+      </button>
+      <button type="button" class="btn-tab-mode" id="mode-compare-tab">
+        <svg class="icon-small" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+        </svg>
+        <span>Confronta 2 File</span>
+      </button>
+    </div>
+    
+    <!-- Sezione 1: Upload e Configurazione -->
+    <section class="config-section card glass" id="sec-upload">
+      <div class="card-header">
+        <h2 id="title-upload">1. Carica o Incolla i Preferiti</h2>
+        <p class="card-desc">Trascina il file HTML esportato dal browser o incolla direttamente il codice sorgente</p>
+      </div>
+
+      <!-- Layout a due colonne per configurazione -->
+      <div class="config-grid-layout" id="convert-upload-container">
+        
+        <!-- Colonna 1: Caricamento (Tabs + Input) -->
+        <div class="config-input-column">
+          <div class="input-methods-toggle">
+            <button type="button" class="btn btn-toggle active" id="btn-mode-file">File HTML</button>
+            <button type="button" class="btn btn-toggle" id="btn-mode-text">Incolla Codice</button>
+          </div>
+ 
+          <!-- Area Dropzone per File -->
+          <div class="dropzone" id="drop-zone">
+            <div class="dropzone-content">
+              <svg class="dropzone-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+              </svg>
+              <p class="dropzone-text">Trascina qui il file <code>.html</code> oppure</p>
+              <label for="file-input" class="btn btn-primary" id="lbl-file-input">Sfoglia i File</label>
+              <input type="file" id="file-input" accept=".html,.htm" style="display: none;">
+              <p class="file-info" id="selected-file-info"></p>
+            </div>
+          </div>
+ 
+          <!-- Area Textarea per Incolla (nascosta all'inizio) -->
+          <div class="text-paste-area hidden" id="paste-container">
+            <textarea id="text-paste" placeholder="Incolla qui il codice sorgente HTML dei tuoi preferiti (inizia tipicamente con <!DOCTYPE NETSCAPE-Bookmark-file-1>)..." aria-label="Codice sorgente HTML"></textarea>
+          </div>
+        </div>
+ 
+        <!-- Colonna 2: Impostazioni ed Opzioni -->
+        <div class="config-settings-column">
+          <!-- Impostazioni di Conversione -->
+          <div class="parser-options">
+            <h3>Opzioni di Elaborazione</h3>
+            <div class="options-grid">
+              <div class="option-item">
+                <label class="switch-container">
+                  <input type="checkbox" id="opt-exclude-icons" checked>
+                  <span class="switch-slider"></span>
+                  <span class="switch-label">Escludi icone base64 (consigliato per file grandi)</span>
+                </label>
+              </div>
+              <div class="option-item">
+                <label for="opt-date-format" class="select-label">Formato Data:</label>
+                <select id="opt-date-format" class="select-control">
+                  <option value="iso" selected>Stringa ISO (YYYY-MM-DDTHH:mm:ssZ)</option>
+                  <option value="unix">Timestamp Unix (Secondi)</option>
+                  <option value="locale">Formato Locale Leggibile</option>
+                </select>
+              </div>
+            </div>
+          </div>
+ 
+          <div class="action-bar">
+            <button type="button" class="btn btn-gradient btn-large" id="btn-process">Converti Ora</button>
+            <button type="button" class="btn btn-outline" id="btn-load-example">Carica Esempio DDG (11)</button>
+          </div>
+        </div>
+ 
+      </div>
+
+      <!-- Sezione di caricamento per il confronto (visibile in modalità compare) -->
+      <div class="config-grid-layout hidden" id="compare-upload-container">
+        <!-- Colonna 1: File A e File B side-by-side -->
+        <div class="compare-grid-layout">
+          <!-- Colonna File A (Vecchio) -->
+          <div class="compare-file-column">
+            <h3 class="compare-column-title">
+              <svg class="icon-small text-muted" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              File A <span>(Precedente / Riferimento)</span>
+            </h3>
+            
+            <div class="input-methods-toggle">
+              <button type="button" class="btn btn-toggle active" id="btn-compare-mode-file-a">File HTML</button>
+              <button type="button" class="btn btn-toggle" id="btn-compare-mode-text-a">Incolla Codice</button>
+            </div>
+
+            <!-- Dropzone File A -->
+            <div class="dropzone" id="drop-zone-a">
+              <div class="dropzone-content">
+                <svg class="dropzone-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                </svg>
+                <p class="dropzone-text">Trascina qui il <b>File A</b> (.html)</p>
+                <label for="file-input-a" class="btn btn-primary btn-small" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Sfoglia</label>
+                <input type="file" id="file-input-a" accept=".html,.htm" style="display: none;">
+                <p class="file-info" id="selected-file-info-a"></p>
+              </div>
+            </div>
+
+            <!-- Paste Area File A -->
+            <div class="text-paste-area hidden" id="paste-container-a">
+              <textarea id="text-paste-a" placeholder="Incolla il codice HTML del File A (vecchio)..." aria-label="Codice sorgente HTML File A"></textarea>
+            </div>
+          </div>
+
+          <!-- Colonna File B (Nuovo) -->
+          <div class="compare-file-column">
+            <h3 class="compare-column-title">
+              <svg class="icon-small text-muted" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              File B <span>(Successivo / Aggiornato)</span>
+            </h3>
+
+            <div class="input-methods-toggle">
+              <button type="button" class="btn btn-toggle active" id="btn-compare-mode-file-b">File HTML</button>
+              <button type="button" class="btn btn-toggle" id="btn-compare-mode-text-b">Incolla Codice</button>
+            </div>
+
+            <!-- Dropzone File B -->
+            <div class="dropzone" id="drop-zone-b">
+              <div class="dropzone-content">
+                <svg class="dropzone-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                </svg>
+                <p class="dropzone-text">Trascina qui il <b>File B</b> (.html)</p>
+                <label for="file-input-b" class="btn btn-primary btn-small" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Sfoglia</label>
+                <input type="file" id="file-input-b" accept=".html,.htm" style="display: none;">
+                <p class="file-info" id="selected-file-info-b"></p>
+              </div>
+            </div>
+
+            <!-- Paste Area File B -->
+            <div class="text-paste-area hidden" id="paste-container-b">
+              <textarea id="text-paste-b" placeholder="Incolla il codice HTML del File B (nuovo)..." aria-label="Codice sorgente HTML File B"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sezione Opzioni e Azione per il Confronto -->
+        <div class="compare-action-column">
+          <div class="parser-options" style="border-top: none; padding-top: 1.5rem; margin-bottom: 0;">
+            <h3>Opzioni di Confronto</h3>
+            <div class="options-grid">
+              <div class="option-item">
+                <label class="switch-container">
+                  <input type="checkbox" id="opt-compare-exclude-icons" checked>
+                  <span class="switch-slider"></span>
+                  <span class="switch-label">Escludi icone base64 (consigliato per file grandi)</span>
+                </label>
+              </div>
+              <div class="option-item">
+                <label for="opt-compare-date-format" class="select-label">Formato Data:</label>
+                <select id="opt-compare-date-format" class="select-control">
+                  <option value="iso" selected>Stringa ISO (YYYY-MM-DDTHH:mm:ssZ)</option>
+                  <option value="unix">Timestamp Unix (Secondi)</option>
+                  <option value="locale">Formato Locale Leggibile</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="compare-action-bar">
+            <button type="button" class="btn btn-outline" id="btn-load-compare-example">Carica Esempio di Confronto</button>
+            <button type="button" class="btn btn-gradient btn-large" id="btn-compare">Confronta Ora</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Indicatore di Caricamento / Elaborazione -->
+    <div class="loader-container hidden" id="app-loader">
+      <div class="spinner"></div>
+      <p id="loader-message">Conversione in corso... Elaborazione dei dati in corso.</p>
+    </div>
+
+    <!-- Sezione Risultati (Visibile solo dopo il parsing) -->
+    <div class="results-wrapper hidden" id="results-container">
+      
+      <!-- Sezione 2: Cruscotto Statistiche -->
+      <section class="stats-grid" id="sec-stats">
+        <div class="stat-card glass animate-fade-in">
+          <div class="stat-icon-wrapper b-blue">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+            </svg>
+          </div>
+          <div class="stat-content">
+            <span class="stat-val" id="stat-bookmarks">0</span>
+            <span class="stat-lbl">Preferiti Totali</span>
+          </div>
+        </div>
+
+        <div class="stat-card glass animate-fade-in" style="animation-delay: 0.1s;">
+          <div class="stat-icon-wrapper b-violet">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+            </svg>
+          </div>
+          <div class="stat-content">
+            <span class="stat-val" id="stat-folders">0</span>
+            <span class="stat-lbl">Cartelle Totali</span>
+          </div>
+        </div>
+
+        <div class="stat-card glass animate-fade-in" style="animation-delay: 0.2s;">
+          <div class="stat-icon-wrapper b-pink">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"/>
+            </svg>
+          </div>
+          <div class="stat-content">
+            <span class="stat-val" id="stat-depth">0</span>
+            <span class="stat-lbl">Profondità Massima</span>
+          </div>
+        </div>
+
+        <div class="stat-card glass animate-fade-in" style="animation-delay: 0.3s;">
+          <div class="stat-icon-wrapper b-amber">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+            </svg>
+          </div>
+          <div class="stat-content">
+            <span class="stat-val" id="stat-domains">0</span>
+            <span class="stat-lbl">Domini Unici</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Layout Esploratore Principale: Sidebar Albero + Tabella Dati -->
+      <div class="dashboard-layout">
+        
+        <!-- Sidebar: Albero Cartelle e Grafico Domini -->
+        <aside class="dashboard-sidebar">
+          
+          <!-- Box Albero Cartelle -->
+          <div class="card glass sidebar-card" id="card-tree">
+            <div class="card-header">
+              <h3>Struttura ad Albero</h3>
+              <p class="card-desc">Naviga gerarchicamente tra le cartelle</p>
+            </div>
+            
+            <div class="tree-controls">
+              <div class="tree-search-wrapper">
+                <input type="text" id="tree-search-input" placeholder="Cerca cartella..." aria-label="Cerca cartella nell'albero">
+                <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <div class="tree-actions-row">
+                <div class="tree-buttons">
+                  <button type="button" class="btn btn-xs btn-outline" id="btn-tree-expand-all" title="Espandi tutte le cartelle">
+                    <svg class="icon-xs" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5" />
+                    </svg>
+                    <span>Espandi</span>
+                  </button>
+                  <button type="button" class="btn btn-xs btn-outline" id="btn-tree-collapse-all" title="Comprimi tutte le cartelle">
+                    <svg class="icon-xs" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 16v4m0 0h-4m4 0l-5-5M4 16v4m0 0h4m-4 0l5-5" />
+                    </svg>
+                    <span>Comprimi</span>
+                  </button>
+                </div>
+                <label class="switch-container tree-link-toggle" title="Mostra link dei preferiti nell'albero">
+                  <input type="checkbox" id="opt-tree-show-links">
+                  <span class="switch-slider"></span>
+                  <span class="switch-label">Link</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="tree-explorer-container">
+              <div id="tree-root-view" class="tree-view"></div>
+            </div>
+          </div>
+
+          <!-- Box Domini più Frequenti -->
+          <div class="card glass sidebar-card" id="card-domains">
+            <div class="card-header">
+              <h3>Domini Principali</h3>
+              <p class="card-desc">I siti web più salvati nei preferiti</p>
+            </div>
+            <div class="domain-stats-list" id="domain-list-view">
+              <!-- Riempito dinamicamente -->
+            </div>
+          </div>
+        </aside>
+
+        <!-- Contenuto Principale: Tabella e Esportazione -->
+        <div class="dashboard-content">
+          
+          <!-- Sezione Tabella (Matrice dei Dati) -->
+          <section class="card glass content-card" id="sec-table-view">
+            <div class="card-header table-header-flex">
+              <div>
+                <h3>Visualizzatore Dati (Matrice)</h3>
+                <p class="card-desc">Preferiti elencati in una tabella ricercabile e filtrabile</p>
+              </div>
+              <div class="table-search-wrapper">
+                <input type="text" id="table-search" placeholder="Cerca preferiti..." aria-label="Cerca preferiti">
+                <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+
+            <!-- Contenitore Tabella responsive -->
+            <div class="table-responsive">
+              <table id="bookmarks-table" class="data-table">
+                <thead>
+                  <tr>
+                    <th class="col-idx">#</th>
+                    <th class="col-folder" data-sort="folder">Cartella <span class="sort-indicator"></span></th>
+                    <th class="col-title" data-sort="title">Titolo <span class="sort-indicator"></span></th>
+                    <th class="col-url" data-sort="url">URL Link <span class="sort-indicator"></span></th>
+                    <th class="col-date" data-sort="date">Data Aggiunta <span class="sort-indicator"></span></th>
+                  </tr>
+                </thead>
+                <tbody id="table-body">
+                  <!-- Righe generate da JS -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Footer Tabella con Pagina -->
+            <div class="table-footer">
+              <div class="table-info-text">
+                Mostrati da <span id="table-range-start">0</span> a <span id="table-range-end">0</span> di <span id="table-total-count">0</span> elementi
+              </div>
+              <div class="pagination-controls">
+                <button type="button" class="btn btn-small btn-outline" id="btn-page-prev">Precedente</button>
+                <div class="page-numbers-container" id="page-numbers">
+                  <!-- Generato da JS -->
+                </div>
+                <button type="button" class="btn btn-small btn-outline" id="btn-page-next">Successivo</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- Sezione 3: Pannello di Esportazione Codice -->
+          <section class="card glass content-card" id="sec-export">
+            <div class="card-header">
+              <h3>Esporta Dati</h3>
+              <p class="card-desc">Seleziona il formato desiderato per visualizzare il codice ed effettuare il download</p>
+            </div>
+
+            <div class="export-tabs-nav">
+              <button type="button" class="btn btn-tab active" data-format="json-flat">Array JSON (Piatto)</button>
+              <button type="button" class="btn btn-tab" data-format="json-tree">Albero JSON (Gerarchico)</button>
+              <button type="button" class="btn btn-tab" data-format="csv">Matrice CSV</button>
+              <button type="button" class="btn btn-tab" data-format="markdown">Markdown (Lista)</button>
+              <button type="button" class="btn btn-tab" data-format="sql">Tabelle SQL</button>
+            </div>
+
+            <!-- Banner ambito esportazione (cartella attiva) -->
+            <div class="export-scope-banner hidden" id="export-scope-banner">
+              <svg class="icon-small" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+              </svg>
+              <span class="export-scope-label">Cartella selezionata: <strong id="export-scope-folder-name">—</strong></span>
+              <label class="switch-container export-scope-toggle" title="Esporta solo la cartella visualizzata">
+                <input type="checkbox" id="opt-export-only-folder">
+                <span class="switch-slider"></span>
+                <span class="switch-label">Solo questa cartella</span>
+              </label>
+            </div>
+
+            <div class="code-output-container">
+              <div class="code-header">
+                <span class="code-filename" id="export-filename">bookmarks.json</span>
+                <div class="code-actions">
+                  <button type="button" class="btn btn-small btn-outline" id="btn-copy-code">
+                    <svg class="icon-small" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
+                    </svg>
+                    <span>Copia Codice</span>
+                  </button>
+                  <button type="button" class="btn btn-small btn-primary" id="btn-download-code">
+                    <svg class="icon-small" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                    </svg>
+                    <span>Scarica File</span>
+                  </button>
+                </div>
+              </div>
+              <textarea class="code-textarea" id="code-output-text" readonly aria-label="Codice esportato"></textarea>
+            </div>
+          </section>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Sezione Risultati Confronto (Visibile solo dopo il confronto) -->
+    <div class="results-wrapper hidden" id="compare-results-container">
+      
+      <!-- Sezione 2: Cruscotto Statistiche Confronto -->
+      <section class="stats-grid" id="sec-compare-stats">
+        <div class="stat-card glass animate-fade-in">
+          <div class="stat-icon-wrapper b-green">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <div class="stat-content">
+            <span class="stat-val" id="stat-compare-added">0</span>
+            <span class="stat-lbl">Aggiunti</span>
+          </div>
+        </div>
+
+        <div class="stat-card glass animate-fade-in" style="animation-delay: 0.1s;">
+          <div class="stat-icon-wrapper b-red">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <div class="stat-content">
+            <span class="stat-val" id="stat-compare-removed">0</span>
+            <span class="stat-lbl">Rimossi</span>
+          </div>
+        </div>
+
+        <div class="stat-card glass animate-fade-in" style="animation-delay: 0.2s;">
+          <div class="stat-icon-wrapper b-amber">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89H18v3.54"/>
+            </svg>
+          </div>
+          <div class="stat-content">
+            <span class="stat-val" id="stat-compare-modified">0</span>
+            <span class="stat-lbl">Modificati</span>
+          </div>
+        </div>
+
+        <div class="stat-card glass animate-fade-in" style="animation-delay: 0.3s;">
+          <div class="stat-icon-wrapper b-blue">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <div class="stat-content">
+            <span class="stat-val" id="stat-compare-identical">0</span>
+            <span class="stat-lbl">Identici</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Layout Tabella di Confronto -->
+      <div class="dashboard-layout" style="grid-template-columns: 1fr;">
+        <div class="dashboard-content">
+          
+          <!-- Sezione Tabella Differenze -->
+          <section class="card glass content-card" id="sec-compare-table-view">
+            <div class="card-header table-header-flex">
+              <div>
+                <h3>Report delle Differenze</h3>
+                <p class="card-desc">Elenco delle modifiche rilevate tra i due file di preferiti</p>
+              </div>
+              <div class="table-search-wrapper">
+                <input type="text" id="compare-table-search" placeholder="Cerca modifiche..." aria-label="Cerca modifiche">
+                <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+
+            <!-- Tab di Filtro Categorie Confronto -->
+            <div class="export-tabs-nav" id="compare-filter-tabs" style="margin-bottom: 1.25rem;">
+              <button type="button" class="btn btn-tab active" data-filter="all">Tutti (<span id="cnt-all">0</span>)</button>
+              <button type="button" class="btn btn-tab" data-filter="added">Aggiunti (<span id="cnt-added">0</span>)</button>
+              <button type="button" class="btn btn-tab" data-filter="removed">Rimossi (<span id="cnt-removed">0</span>)</button>
+              <button type="button" class="btn btn-tab" data-filter="modified">Modificati (<span id="cnt-modified">0</span>)</button>
+              <button type="button" class="btn btn-tab" data-filter="identical">Identici (<span id="cnt-identical">0</span>)</button>
+            </div>
+
+            <!-- Contenitore Tabella responsive -->
+            <div class="table-responsive">
+              <table id="compare-table" class="data-table">
+                <thead>
+                  <tr>
+                    <th class="col-idx">#</th>
+                    <th class="col-status">Stato</th>
+                    <th class="col-folder">Cartella (Vecchio &rarr; Nuovo)</th>
+                    <th class="col-title">Titolo (Vecchio &rarr; Nuovo)</th>
+                    <th class="col-url">URL Link</th>
+                    <th class="col-date">Data Aggiunta</th>
+                  </tr>
+                </thead>
+                <tbody id="compare-table-body">
+                  <!-- Righe generate da JS -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Footer Tabella con Pagina -->
+            <div class="table-footer">
+              <div class="table-info-text">
+                Mostrati da <span id="compare-range-start">0</span> a <span id="compare-range-end">0</span> di <span id="compare-total-count">0</span> elementi
+              </div>
+              <div class="pagination-controls">
+                <button type="button" class="btn btn-small btn-outline" id="btn-compare-page-prev">Precedente</button>
+                <div class="page-numbers-container" id="compare-page-numbers">
+                  <!-- Generato da JS -->
+                </div>
+                <button type="button" class="btn btn-small btn-outline" id="btn-compare-page-next">Successivo</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- Sezione Esportazione Report Differenze -->
+          <section class="card glass content-card" id="sec-compare-export">
+            <div class="card-header">
+              <h3>Esporta Report Differenze</h3>
+              <p class="card-desc">Esporta il report del confronto nel formato desiderato per il salvataggio</p>
+            </div>
+
+            <div class="export-tabs-nav" id="compare-export-tabs">
+              <button type="button" class="btn btn-tab active" data-format="json">Report JSON</button>
+              <button type="button" class="btn btn-tab" data-format="csv">Report CSV</button>
+              <button type="button" class="btn btn-tab" data-format="markdown">Report Markdown (.md)</button>
+            </div>
+
+            <div class="code-output-container">
+              <div class="code-header">
+                <span class="code-filename" id="compare-export-filename">report_confronto.json</span>
+                <div class="code-actions">
+                  <button type="button" class="btn btn-small btn-outline" id="btn-compare-copy-code">
+                    <svg class="icon-small" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
+                    </svg>
+                    <span>Copia Report</span>
+                  </button>
+                  <button type="button" class="btn btn-small btn-primary" id="btn-compare-download-code">
+                    <svg class="icon-small" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                    </svg>
+                    <span>Scarica Report</span>
+                  </button>
+                </div>
+              </div>
+              <textarea class="code-textarea" id="compare-code-output-text" readonly aria-label="Report esportato"></textarea>
+            </div>
+          </section>
+
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="app-footer">
+    <div class="footer-container">
+      <p>&copy; 2026 LinkCascade. Progetto open source client-side. Nessun dato viene trasmesso a server esterni.</p>
+    </div>
+  </footer>
+
+  <!-- Caricamento Script in modalità Modulo -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
