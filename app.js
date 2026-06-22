@@ -197,6 +197,15 @@ const elements = {
   btnGraphTypeSunburst: document.getElementById('btn-graph-type-sunburst'),
   optGraphShowLinks: document.getElementById('opt-graph-show-links'),
   btnGraphReset: document.getElementById('btn-graph-reset'),
+
+  // QR Code Modal
+  qrModal: document.getElementById('qr-modal'),
+  qrModalClose: document.getElementById('qr-modal-close'),
+  qrModalTitle: document.getElementById('qr-modal-title'),
+  qrModalUrl: document.getElementById('qr-modal-url'),
+  qrCanvas: document.getElementById('qr-canvas'),
+  btnQrCopyUrl: document.getElementById('btn-qr-copy-url'),
+  btnQrDownload: document.getElementById('btn-qr-download'),
 };
 
 // --- INIZIALIZZAZIONE ---
@@ -206,6 +215,71 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // --- GESTIONE EVENTI ---
 function setupEventListeners() {
+  // Eventi per Modal QR Code
+  if (elements.qrModalClose) {
+    elements.qrModalClose.addEventListener('click', closeQRModal);
+  }
+  if (elements.qrModal) {
+    elements.qrModal.addEventListener('click', (e) => {
+      if (e.target === elements.qrModal) {
+        closeQRModal();
+      }
+    });
+  }
+  
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && elements.qrModal && elements.qrModal.classList.contains('active')) {
+      closeQRModal();
+    }
+  });
+
+  // Delegazione click per tasto Genera QR
+  document.addEventListener('click', (e) => {
+    const qrBtn = e.target.closest('.btn-qr-action');
+    if (qrBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const url = qrBtn.getAttribute('data-url');
+      const title = qrBtn.getAttribute('data-title');
+      openQRModal(url, title);
+    }
+  });
+
+  if (elements.btnQrCopyUrl) {
+    elements.btnQrCopyUrl.addEventListener('click', () => {
+      if (!activeQRUrl) return;
+      navigator.clipboard.writeText(activeQRUrl).then(() => {
+        const span = elements.btnQrCopyUrl.querySelector('span');
+        const originalText = span.textContent;
+        span.textContent = 'Copiato!';
+        elements.btnQrCopyUrl.style.borderColor = 'var(--accent-blue)';
+        elements.btnQrCopyUrl.style.color = 'var(--accent-blue)';
+        setTimeout(() => {
+          span.textContent = originalText;
+          elements.btnQrCopyUrl.style.borderColor = '';
+          elements.btnQrCopyUrl.style.color = '';
+        }, 2000);
+      }).catch(err => {
+        console.error('Impossibile copiare il link:', err);
+      });
+    });
+  }
+
+  if (elements.btnQrDownload) {
+    elements.btnQrDownload.addEventListener('click', () => {
+      if (!elements.qrCanvas) return;
+      try {
+        const link = document.createElement('a');
+        const cleanTitle = elements.qrModalTitle.textContent.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        link.download = `qrcode_${cleanTitle || 'link'}.png`;
+        link.href = elements.qrCanvas.toDataURL('image/png');
+        link.click();
+      } catch (err) {
+        console.error('Impossibile scaricare l\'immagine:', err);
+      }
+    });
+  }
+
   // Cambio modalità input
   elements.btnModeFile.addEventListener('click', () => toggleInputMode('file'));
   elements.btnModeText.addEventListener('click', () => toggleInputMode('text'));
@@ -994,6 +1068,14 @@ function buildTreeHTML(nodes, parentEl, currentPath = []) {
       linkEl.innerHTML = `
         ${faviconHtml}
         <span class="bookmark-title" title="${escapeHTML(node.title)}">${escapeHTML(node.title)}</span>
+        <button type="button" class="btn-qr-action" title="Genera Codice QR" data-url="${escapeHTML(node.url)}" data-title="${escapeHTML(node.title)}">
+          <svg class="icon-qr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+            <path d="M14 14h2v2h-2zM18 14h3v3h-3zM14 18h3v3h-3zM20 18h1v1h-1zM18 20h2v1h-2zM14 16h2v2h-2zM16 16h2v2h-2z"></path>
+          </svg>
+        </button>
       `;
       
       parentEl.appendChild(linkEl);
@@ -1124,8 +1206,18 @@ function renderTable() {
       <td class="col-idx" style="text-align: center; color: var(--text-muted);">${globalIdx}</td>
       <td class="col-folder">${folderSpan}</td>
       <td class="col-title" title="${bookmark.title}">
-        ${faviconHtml}
-        <span>${escapeHTML(bookmark.title)}</span>
+        <div class="table-title-container">
+          ${faviconHtml}
+          <span class="bookmark-title-text">${escapeHTML(bookmark.title)}</span>
+          <button type="button" class="btn-qr-action" title="Genera Codice QR" data-url="${escapeHTML(bookmark.url)}" data-title="${escapeHTML(bookmark.title)}">
+            <svg class="icon-qr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+              <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+              <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+              <path d="M14 14h2v2h-2zM18 14h3v3h-3zM14 18h3v3h-3zM20 18h1v1h-1zM18 20h2v1h-2zM14 16h2v2h-2zM16 16h2v2h-2z"></path>
+            </svg>
+          </button>
+        </div>
       </td>
       <td class="col-url" title="${bookmark.url}">
         <a href="${bookmark.url}" target="_blank" rel="noopener noreferrer">${escapeHTML(bookmark.url)}</a>
@@ -1962,7 +2054,19 @@ function renderCompareTable() {
       <td class="col-idx" style="text-align: center; color: var(--text-muted);">${globalIdx}</td>
       <td class="col-status">${badgeHtml}</td>
       <td class="col-folder">${folderHtml}</td>
-      <td class="col-title">${titleHtml}</td>
+      <td class="col-title">
+        <div class="table-title-container">
+          <div style="flex: 1; min-width: 0;">${titleHtml}</div>
+          <button type="button" class="btn-qr-action" title="Genera Codice QR" data-url="${escapeHTML(item.url)}" data-title="${escapeHTML(item.title || item.newTitle || item.oldTitle || 'Preferito')}">
+            <svg class="icon-qr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+              <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+              <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+              <path d="M14 14h2v2h-2zM18 14h3v3h-3zM14 18h3v3h-3zM20 18h1v1h-1zM18 20h2v1h-2zM14 16h2v2h-2zM16 16h2v2h-2z"></path>
+            </svg>
+          </button>
+        </div>
+      </td>
       <td class="col-url" title="${item.url}">
         <a href="${item.url}" target="_blank" rel="noopener noreferrer">${escapeHTML(item.url)}</a>
       </td>
@@ -2205,3 +2309,33 @@ function selectFolderByPath(folderPath) {
   // Ri-disegna il grafico per rispecchiare la nuova selezione
   renderVisuals();
 }
+
+// --- LOGICA MODAL GENERATORE QR CODE ---
+let activeQRUrl = '';
+
+function openQRModal(url, title) {
+  activeQRUrl = url;
+  if (elements.qrModalTitle) elements.qrModalTitle.textContent = title || 'QR Code';
+  if (elements.qrModalUrl) elements.qrModalUrl.textContent = url;
+  
+  // Genera il codice QR
+  try {
+    new QRious({
+      element: elements.qrCanvas,
+      value: url,
+      size: 220,
+      level: 'H',
+      foreground: '#060914',
+      background: '#ffffff'
+    });
+  } catch (err) {
+    console.error('Errore nella generazione del QR Code:', err);
+  }
+  
+  if (elements.qrModal) elements.qrModal.classList.add('active');
+}
+
+function closeQRModal() {
+  if (elements.qrModal) elements.qrModal.classList.remove('active');
+}
+
