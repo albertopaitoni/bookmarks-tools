@@ -478,12 +478,12 @@ function handleSelectedFile(file) {
 async function loadExampleFile() {
   showLoader('Download file di esempio...');
   try {
-    const response = await fetch('./esempi/DuckDuckGo Bookmarks (11) Organized.html');
+    const response = await fetch('./esempi/compare_example_new.html');
     if (!response.ok) throw new Error('Impossibile scaricare il file di esempio.');
     const text = await response.text();
     
     appState.originalHtml = text;
-    elements.selectedFileInfo.textContent = `Caricato: DuckDuckGo Bookmarks (11) Organized.html`;
+    elements.selectedFileInfo.textContent = `Caricato file esempio`;
     
     // Passa in modalità file e processa
     toggleInputMode('file');
