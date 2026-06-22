@@ -4,7 +4,7 @@
  * e delle esportazioni del convertitore di preferiti bookmarks tools.
  */
 
-import { parseBookmarks, flattenBookmarks } from './parser.js';
+import { parseBookmarks, flattenBookmarks, decompressMozLz4 } from './parser.js';
 import { compareBookmarks, generateCompareCSV, generateCompareMarkdown } from './comparator.js';
 import { renderVisualGraph, resetZoom as graphResetZoom } from './visualization.js';
 
@@ -592,14 +592,84 @@ function toggleInputMode(mode) {
   }
 }
 
+function processUploadedFileBuffer(fileName, arrayBuffer) {
+  const uint8 = new Uint8Array(arrayBuffer);
+  
+  // 1. Rileva header mozLz40\0 (8 byte)
+  const magic = [109, 111, 122, 76, 122, 52, 48, 0]; // "mozLz40\0"
+  let isMozLz4 = uint8.length >= 8;
+  if (isMozLz4) {
+    for (let i = 0; i < 8; i++) {
+      if (uint8[i] !== magic[i]) {
+        isMozLz4 = false;
+        break;
+      }
+    }
+  }
+
+  if (isMozLz4) {
+    try {
+      const decompressed = decompressMozLz4(uint8);
+      return {
+        text: decompressed,
+        status: "Backup Firefox compresso (.jsonlz4) decodificato"
+      };
+    } catch (err) {
+      console.error("LZ4 Decompression failed:", err);
+      throw new Error("Impossibile decomprimere il file .jsonlz4. Il file potrebbe essere corrotto.");
+    }
+  }
+
+  // 2. Altrimenti, decodifica come testo UTF-8
+  const text = new TextDecoder("utf-8").decode(uint8);
+  const trimmed = text.trim();
+
+  // Controlla se è JSON
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      const json = JSON.parse(trimmed);
+      if (json.roots) {
+        return {
+          text: text,
+          status: "Preferiti Chrome (JSON) rilevati"
+        };
+      } else if (json.children || json.guid || json.root === 'placesRoot') {
+        return {
+          text: text,
+          status: "Backup preferiti Firefox (JSON) rilevato"
+        };
+      } else {
+        return {
+          text: text,
+          status: "File JSON rilevato"
+        };
+      }
+    } catch (e) {
+      // Non è un JSON valido, tratta come testo/HTML
+    }
+  }
+
+  return {
+    text: text,
+    status: "File preferiti HTML caricato"
+  };
+}
+
 function handleSelectedFile(file) {
   elements.selectedFileInfo.textContent = `Selezionato: ${file.name} (${formatBytes(file.size)})`;
   const reader = new FileReader();
   reader.onload = (e) => {
-    appState.originalHtml = e.target.result;
-    showToast('File caricato con successo!');
+    try {
+      const result = processUploadedFileBuffer(file.name, e.target.result);
+      appState.originalHtml = result.text;
+      elements.selectedFileInfo.textContent = `Selezionato: ${file.name} (${formatBytes(file.size)}) - ${result.status}`;
+      showToast(`${result.status} con successo!`);
+    } catch (err) {
+      showToast('Errore di caricamento: ' + err.message);
+      elements.selectedFileInfo.textContent = `Errore: ${err.message}`;
+    }
   };
-  reader.readAsText(file);
+  reader.readAsArrayBuffer(file);
 }
 
 async function loadExampleFile() {
@@ -1761,18 +1831,25 @@ function handleSelectedCompareFile(fileKey, file) {
   
   const reader = new FileReader();
   reader.onload = (e) => {
-    if (fileKey === 'A') {
-      appState.fileA.rawHtml = e.target.result;
-      appState.fileA.name = file.name;
-      appState.fileA.size = file.size;
-    } else {
-      appState.fileB.rawHtml = e.target.result;
-      appState.fileB.name = file.name;
-      appState.fileB.size = file.size;
+    try {
+      const result = processUploadedFileBuffer(file.name, e.target.result);
+      if (fileKey === 'A') {
+        appState.fileA.rawHtml = result.text;
+        appState.fileA.name = file.name;
+        appState.fileA.size = file.size;
+      } else {
+        appState.fileB.rawHtml = result.text;
+        appState.fileB.name = file.name;
+        appState.fileB.size = file.size;
+      }
+      infoEl.textContent = `Selezionato: ${file.name} (${formatBytes(file.size)}) - ${result.status}`;
+      showToast(`File ${fileKey} caricato come ${result.status}!`);
+    } catch (err) {
+      showToast(`Errore caricamento File ${fileKey}: ` + err.message);
+      infoEl.textContent = `Errore: ${err.message}`;
     }
-    showToast(`File ${fileKey} caricato con successo!`);
   };
-  reader.readAsText(file);
+  reader.readAsArrayBuffer(file);
 }
 
 async function loadCompareExampleFiles() {

@@ -62,10 +62,10 @@
       <!-- Layout a due colonne per configurazione -->
       <div class="config-grid-layout" id="convert-upload-container">
         
-        <!-- Colonna 1: Caricamento (Tabs + Input) -->
+         <!-- Colonna 1: Caricamento (Tabs + Input) -->
         <div class="config-input-column">
           <div class="input-methods-toggle">
-            <button type="button" class="btn btn-toggle active" id="btn-mode-file">File HTML</button>
+            <button type="button" class="btn btn-toggle active" id="btn-mode-file">File Preferiti</button>
             <button type="button" class="btn btn-toggle" id="btn-mode-text">Incolla Codice</button>
           </div>
  
@@ -75,9 +75,9 @@
               <svg class="dropzone-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
               </svg>
-              <p class="dropzone-text">Trascina qui il file <code>.html</code> oppure</p>
+              <p class="dropzone-text">Trascina qui il file <code>.html</code>, <code>.json</code>, <code>.jsonlz4</code> o <code>Bookmarks</code> oppure</p>
               <label for="file-input" class="btn btn-primary" id="lbl-file-input">Sfoglia i File</label>
-              <input type="file" id="file-input" accept=".html,.htm" style="display: none;">
+              <input type="file" id="file-input" accept=".html,.htm,.json,.jsonlz4,*" style="display: none;">
               <p class="file-info" id="selected-file-info"></p>
             </div>
           </div>
@@ -134,7 +134,7 @@
             </h3>
             
             <div class="input-methods-toggle">
-              <button type="button" class="btn btn-toggle active" id="btn-compare-mode-file-a">File HTML</button>
+              <button type="button" class="btn btn-toggle active" id="btn-compare-mode-file-a">File Preferiti</button>
               <button type="button" class="btn btn-toggle" id="btn-compare-mode-text-a">Incolla Codice</button>
             </div>
 
@@ -144,16 +144,16 @@
                 <svg class="dropzone-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                 </svg>
-                <p class="dropzone-text">Trascina qui il <b>File A</b> (.html)</p>
+                <p class="dropzone-text">Trascina qui il <b>File A</b> (HTML/JSON/JSONLZ4)</p>
                 <label for="file-input-a" class="btn btn-primary btn-small" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Sfoglia</label>
-                <input type="file" id="file-input-a" accept=".html,.htm" style="display: none;">
+                <input type="file" id="file-input-a" accept=".html,.htm,.json,.jsonlz4,*" style="display: none;">
                 <p class="file-info" id="selected-file-info-a"></p>
               </div>
             </div>
 
             <!-- Paste Area File A -->
             <div class="text-paste-area hidden" id="paste-container-a">
-              <textarea id="text-paste-a" placeholder="Incolla il codice HTML del File A (vecchio)..." aria-label="Codice sorgente HTML File A"></textarea>
+              <textarea id="text-paste-a" placeholder="Incolla il codice HTML o JSON del File A (vecchio)..." aria-label="Codice sorgente HTML/JSON File A"></textarea>
             </div>
           </div>
 
@@ -167,7 +167,7 @@
             </h3>
 
             <div class="input-methods-toggle">
-              <button type="button" class="btn btn-toggle active" id="btn-compare-mode-file-b">File HTML</button>
+              <button type="button" class="btn btn-toggle active" id="btn-compare-mode-file-b">File Preferiti</button>
               <button type="button" class="btn btn-toggle" id="btn-compare-mode-text-b">Incolla Codice</button>
             </div>
 
@@ -177,16 +177,16 @@
                 <svg class="dropzone-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                 </svg>
-                <p class="dropzone-text">Trascina qui il <b>File B</b> (.html)</p>
+                <p class="dropzone-text">Trascina qui il <b>File B</b> (HTML/JSON/JSONLZ4)</p>
                 <label for="file-input-b" class="btn btn-primary btn-small" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Sfoglia</label>
-                <input type="file" id="file-input-b" accept=".html,.htm" style="display: none;">
+                <input type="file" id="file-input-b" accept=".html,.htm,.json,.jsonlz4,*" style="display: none;">
                 <p class="file-info" id="selected-file-info-b"></p>
               </div>
             </div>
 
             <!-- Paste Area File B -->
             <div class="text-paste-area hidden" id="paste-container-b">
-              <textarea id="text-paste-b" placeholder="Incolla il codice HTML del File B (nuovo)..." aria-label="Codice sorgente HTML File B"></textarea>
+              <textarea id="text-paste-b" placeholder="Incolla il codice HTML o JSON del File B (nuovo)..." aria-label="Codice sorgente HTML/JSON File B"></textarea>
             </div>
           </div>
         </div>

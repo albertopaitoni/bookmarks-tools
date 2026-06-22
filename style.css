@@ -1872,7 +1872,7 @@ body {
 }
 
 .tree-bookmark-node:hover .btn-qr-action,
-.table-title-container:hover .btn-qr-action {
+tr:hover .btn-qr-action {
   opacity: 1;
 }
 
