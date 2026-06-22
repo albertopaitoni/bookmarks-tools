@@ -1,7 +1,7 @@
 /**
  * app.js
  * Controller per la gestione dell'interfaccia utente, del flusso di lavoro
- * e delle esportazioni del convertitore di preferiti LinkCascade.
+ * e delle esportazioni del convertitore di preferiti bookmarks tools.
  */
 
 import { parseBookmarks, flattenBookmarks } from './parser.js';
@@ -1301,7 +1301,7 @@ function generateMarkdown(treeData) {
 }
 
 function generateSQL(flatData) {
-  let sql = `-- Tabella creata per preferiti LinkCascade\n`;
+  let sql = `-- Tabella creata per preferiti Bookmarks Tools\n`;
   sql += `CREATE TABLE IF NOT EXISTS preferiti (\n`;
   sql += `  id INT AUTO_INCREMENT PRIMARY KEY,\n`;
   sql += `  percorso_cartella TEXT,\n`;
