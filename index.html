@@ -10,6 +10,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <!-- D3.js per Grafici e Mappe Mentali -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body>
 
@@ -340,6 +342,23 @@
         <!-- Contenuto Principale: Tabella e Esportazione -->
         <div class="dashboard-content">
           
+          <!-- Navigazione tra Tabella e Mappa Grafica -->
+          <div class="content-tabs-nav glass">
+            <button type="button" class="btn btn-tab active" id="tab-btn-table" data-view="table">
+              <svg class="icon-small" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+              </svg>
+              <span>Tabella Preferiti</span>
+            </button>
+            <button type="button" class="btn btn-tab" id="tab-btn-graph" data-view="graph">
+              <svg class="icon-small" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+              </svg>
+              <span>Mappa Grafica</span>
+            </button>
+          </div>
+
           <!-- Sezione Tabella (Matrice dei Dati) -->
           <section class="card glass content-card" id="sec-table-view">
             <div class="card-header table-header-flex">
@@ -388,6 +407,47 @@
             </div>
           </section>
 
+          <!-- Sezione Mappa Grafica (Mappa Mentale / Sunburst) -->
+          <section class="card glass content-card hidden" id="sec-graph-view">
+            <div class="card-header graph-header-flex">
+              <div class="graph-title-desc">
+                <h3>Visualizzazione Grafica</h3>
+                <p class="card-desc">Esplora i tuoi preferiti con grafici interattivi. Fai doppio clic su un preferito per aprirlo.</p>
+              </div>
+              <div class="graph-controls">
+                <div class="input-methods-toggle" style="margin-bottom: 0;">
+                  <button type="button" class="btn btn-toggle active" id="btn-graph-type-force">Mappa Mentale (Grafo)</button>
+                  <button type="button" class="btn btn-toggle" id="btn-graph-type-sunburst">Grafico ad Anello (Sunburst)</button>
+                </div>
+                <div class="graph-options-row">
+                  <label class="switch-container" title="Mostra preferiti individuali nel grafico">
+                    <input type="checkbox" id="opt-graph-show-links" checked>
+                    <span class="switch-slider"></span>
+                    <span class="switch-label">Includi Link</span>
+                  </label>
+                  <button type="button" class="btn btn-small btn-outline" id="btn-graph-reset">
+                    <svg class="icon-small" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89H18v3.54" />
+                    </svg>
+                    <span>Ripristina Zoom</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Canvas area per D3 -->
+            <div class="graph-canvas-wrapper glass">
+              <div id="graph-canvas-container" class="graph-canvas-container"></div>
+              <!-- Tooltip fluttuante (posizionato in assoluto) -->
+              <div id="graph-tooltip" class="graph-tooltip hidden"></div>
+              <!-- Legenda per il grafico -->
+              <div class="graph-legend" id="graph-legend">
+                <div class="legend-item"><span class="legend-dot color-folder"></span><span>Cartella</span></div>
+                <div class="legend-item"><span class="legend-dot color-bookmark"></span><span>Preferito</span></div>
+              </div>
+            </div>
+          </section>
+
           <!-- Sezione 3: Pannello di Esportazione Codice -->
           <section class="card glass content-card" id="sec-export">
             <div class="card-header">
@@ -401,6 +461,15 @@
               <button type="button" class="btn btn-tab" data-format="csv">Matrice CSV</button>
               <button type="button" class="btn btn-tab" data-format="markdown">Markdown (Lista)</button>
               <button type="button" class="btn btn-tab" data-format="sql">Tabelle SQL</button>
+            </div>
+
+            <!-- Opzioni di Esportazione -->
+            <div class="export-options-bar">
+              <label class="switch-container export-scope-toggle" title="Rimuovi parametri di tracciamento (utm, fbclid, ref...) dagli URL per maggiore privacy">
+                <input type="checkbox" id="opt-clean-urls">
+                <span class="switch-slider"></span>
+                <span class="switch-label">🔗 Pulizia URL e Rimozione Tracker</span>
+              </label>
             </div>
 
             <!-- Banner ambito esportazione (cartella attiva) -->
@@ -569,6 +638,15 @@
               <button type="button" class="btn btn-tab active" data-format="json">Report JSON</button>
               <button type="button" class="btn btn-tab" data-format="csv">Report CSV</button>
               <button type="button" class="btn btn-tab" data-format="markdown">Report Markdown (.md)</button>
+            </div>
+
+            <!-- Opzioni di Esportazione -->
+            <div class="export-options-bar">
+              <label class="switch-container export-scope-toggle" title="Rimuovi parametri di tracciamento (utm, fbclid, ref...) dagli URL per maggiore privacy">
+                <input type="checkbox" id="opt-compare-clean-urls">
+                <span class="switch-slider"></span>
+                <span class="switch-label">🔗 Pulizia URL e Rimozione Tracker</span>
+              </label>
             </div>
 
             <div class="code-output-container">

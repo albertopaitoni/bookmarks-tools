@@ -93,4 +93,4 @@ Per eseguire e testare l'applicazione sul proprio computer, assicurarsi di aver 
 
 ## 🔒 Sicurezza e Privacy
 
-LinkCascade rispetta la tua privacy. Il codice è eseguito interamente sul client (nel tuo browser). Nessuno dei tuoi preferiti o dei report di confronto viene mai caricato su server remoti, rendendo lo strumento sicuro anche per l'uso con dati aziendali o sensibili.
+Bookmarks Tools rispetta la tua privacy. Il codice è eseguito interamente sul client (nel tuo browser). Nessuno dei tuoi preferiti o dei report di confronto viene mai caricato su server remoti, rendendo lo strumento sicuro anche per l'uso con dati aziendali o sensibili.

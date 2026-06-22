@@ -6,6 +6,7 @@
 
 import { parseBookmarks, flattenBookmarks } from './parser.js';
 import { compareBookmarks, generateCompareCSV, generateCompareMarkdown } from './comparator.js';
+import { renderVisualGraph, resetZoom as graphResetZoom } from './visualization.js';
 
 // --- STATO DELL'APPLICAZIONE ---
 let appState = {
@@ -25,11 +26,17 @@ let appState = {
   sortColumn: 'idx',
   sortDirection: 'asc',
   
+  // Vista Grafica
+  currentView: 'table', // table or graph
+  graphType: 'force', // force or sunburst
+  graphShowLinks: true,
+  
   // Esportazioni convertitore
   currentExportFormat: 'json-flat',
   excludeIcons: true,
   dateFormat: 'iso', // iso, unix, locale
   exportOnlyFolder: false, // esporta solo cartella visualizzata
+  cleanUrls: false,
 
   // Stato Albero
   showLinksInTree: false,
@@ -40,6 +47,7 @@ let appState = {
   fileB: { name: '', size: 0, rawHtml: '', parsedTree: [], flatBookmarks: [] },
   compareExcludeIcons: true,
   compareDateFormat: 'iso',
+  compareCleanUrls: false,
   comparisonResults: null,
   filteredCompareList: [],
   compareCurrentFilter: 'all', // all, added, removed, modified, identical
@@ -105,6 +113,7 @@ const elements = {
   exportScopeBanner: document.getElementById('export-scope-banner'),
   exportScopeFolderName: document.getElementById('export-scope-folder-name'),
   optExportOnlyFolder: document.getElementById('opt-export-only-folder'),
+  optCleanUrls: document.getElementById('opt-clean-urls'),
 
   // Elementi Albero
   treeSearchInput: document.getElementById('tree-search-input'),
@@ -172,9 +181,22 @@ const elements = {
   // Esportazione Report Differenze
   compareExportTabs: document.getElementById('compare-export-tabs'),
   compareExportFilename: document.getElementById('compare-export-filename'),
+  optCompareCleanUrls: document.getElementById('opt-compare-clean-urls'),
   btnCompareCopyCode: document.getElementById('btn-compare-copy-code'),
   btnCompareDownloadCode: document.getElementById('btn-compare-download-code'),
   compareCodeOutputText: document.getElementById('compare-code-output-text'),
+
+  // Schede vista principale
+  tabBtnTable: document.getElementById('tab-btn-table'),
+  tabBtnGraph: document.getElementById('tab-btn-graph'),
+  secTableView: document.getElementById('sec-table-view'),
+  secGraphView: document.getElementById('sec-graph-view'),
+  
+  // Controlli grafico
+  btnGraphTypeForce: document.getElementById('btn-graph-type-force'),
+  btnGraphTypeSunburst: document.getElementById('btn-graph-type-sunburst'),
+  optGraphShowLinks: document.getElementById('opt-graph-show-links'),
+  btnGraphReset: document.getElementById('btn-graph-reset'),
 };
 
 // --- INIZIALIZZAZIONE ---
@@ -302,6 +324,14 @@ function setupEventListeners() {
   elements.optExportOnlyFolder.addEventListener('change', (e) => {
     appState.exportOnlyFolder = e.target.checked;
     updateExportOutput();
+  });
+
+  // Toggle pulizia URL nell'esportazione
+  elements.optCleanUrls.addEventListener('change', (e) => {
+    appState.cleanUrls = e.target.checked;
+    if (appState.parsedTree.length > 0) {
+      updateExportOutput();
+    }
   });
 
   // Eventi per i controlli dell'albero
@@ -448,6 +478,29 @@ function setupEventListeners() {
   // Copia e download codice report
   elements.btnCompareCopyCode.addEventListener('click', copyCompareReportToClipboard);
   elements.btnCompareDownloadCode.addEventListener('click', downloadCompareReportFile);
+
+  // Toggle pulizia URL nell'esportazione confronto
+  elements.optCompareCleanUrls.addEventListener('change', (e) => {
+    appState.compareCleanUrls = e.target.checked;
+    if (appState.comparisonResults) {
+      updateCompareExportOutput();
+    }
+  });
+
+  // Tab di visualizzazione principale
+  elements.tabBtnTable.addEventListener('click', () => switchContentView('table'));
+  elements.tabBtnGraph.addEventListener('click', () => switchContentView('graph'));
+
+  // Controlli del grafico
+  elements.btnGraphTypeForce.addEventListener('click', () => switchGraphType('force'));
+  elements.btnGraphTypeSunburst.addEventListener('click', () => switchGraphType('sunburst'));
+  elements.optGraphShowLinks.addEventListener('change', (e) => {
+    appState.graphShowLinks = e.target.checked;
+    renderVisuals();
+  });
+  elements.btnGraphReset.addEventListener('click', () => {
+    graphResetZoom();
+  });
 }
 
 // --- LOGICA DI CONTROLLO INTERFACCIA ---
@@ -549,6 +602,7 @@ function processBookmarksData(shouldScroll = true) {
       appState.currentPage = 1;
       appState.activeFolderFilter = null; // Resetta filtro cartella
       applyFiltersAndRenderTable();
+      renderVisuals();
       
       // 6. Generazione file esportazione
       updateExportOutput();
@@ -800,6 +854,7 @@ function renderFolderTree() {
     appState.currentPage = 1;
     applyFiltersAndRenderTable();
     updateExportScopeBanner();
+    renderVisuals();
   });
   
   elements.treeRootView.appendChild(rootHeader);
@@ -907,6 +962,7 @@ function buildTreeHTML(nodes, parentEl, currentPath = []) {
         appState.currentPage = 1;
         applyFiltersAndRenderTable();
         updateExportScopeBanner();
+        renderVisuals();
       });
       
       parentEl.appendChild(nodeEl);
@@ -1163,9 +1219,9 @@ function updateExportOutput() {
         .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
     : null;
 
-  // Applica filtro icone in base alle opzioni dello stato
-  const cleanTree = cleanDataForExport(sourceTree, appState.excludeIcons);
-  const cleanFlat = cleanDataForExport(sourceFlat, appState.excludeIcons);
+  // Applica filtro icone e pulizia URL in base alle opzioni dello stato
+  const cleanTree = cleanDataForExport(sourceTree, appState.excludeIcons, appState.cleanUrls);
+  const cleanFlat = cleanDataForExport(sourceFlat, appState.excludeIcons, appState.cleanUrls);
 
   switch (format) {
     case 'json-flat':
@@ -1237,17 +1293,101 @@ function extractSubtree(nodes, folderPath, depth = 0) {
   return [];
 }
 
-function cleanDataForExport(data, excludeIcons) {
-  // Funzione ricorsiva per ripulire le icone ed evadere modifiche in-place
+/**
+ * Rimuove i parametri di tracciamento superflui da un URL per rispetto della privacy.
+ */
+function cleanUrl(urlStr) {
+  if (!urlStr) return urlStr;
+  try {
+    // Gestione di URL speciali come javascript:, data:, chrome:, about:
+    if (/^(javascript:|data:|chrome:|about:|file:)/i.test(urlStr)) {
+      return urlStr;
+    }
+    
+    // Per gestire URL relativi ed evitare errori, se non iniziano con http o ftp,
+    // proviamo a effettuare il parsing impostando un base fittizio
+    let parsedUrl;
+    let isRelative = false;
+    try {
+      parsedUrl = new URL(urlStr);
+    } catch (e) {
+      parsedUrl = new URL(urlStr, 'http://dummy.xyz');
+      isRelative = true;
+    }
+    
+    const paramsToExclude = [
+      /^utm_/i,
+      /^fbclid$/i,
+      /^gclid$/i,
+      /^gclsrc$/i,
+      /^dclid$/i,
+      /^msclkid$/i,
+      /^yclid$/i,
+      /^mc_eid$/i,
+      /^mc_cid$/i,
+      /^_hsenc$/i,
+      /^_hsmi$/i,
+      /^hsCtaTracking$/i,
+      /^mkt_tok$/i,
+      /^ref$/i,
+      /^ref_/i,
+      /^twclid$/i,
+      /^ttclid$/i,
+      /^li_fat_id$/i,
+      /^igshid$/i,
+      /^si$/i
+    ];
+    
+    const searchParams = parsedUrl.searchParams;
+    const keysToDelete = [];
+    for (const key of searchParams.keys()) {
+      if (paramsToExclude.some(regex => regex.test(key))) {
+        keysToDelete.push(key);
+      }
+    }
+    keysToDelete.forEach(key => searchParams.delete(key));
+    
+    // Controlliamo se c'è un hash e se contiene parametri di tracciamento
+    if (parsedUrl.hash) {
+      const hashParts = parsedUrl.hash.split('?');
+      if (hashParts.length > 1) {
+        const hashParams = new URLSearchParams(hashParts[1]);
+        const hashKeysToDelete = [];
+        for (const key of hashParams.keys()) {
+          if (paramsToExclude.some(regex => regex.test(key))) {
+            hashKeysToDelete.push(key);
+          }
+        }
+        hashKeysToDelete.forEach(key => hashParams.delete(key));
+        const newHashQuery = hashParams.toString();
+        parsedUrl.hash = hashParts[0] + (newHashQuery ? '?' + newHashQuery : '');
+      }
+    }
+    
+    if (isRelative) {
+      return parsedUrl.pathname + parsedUrl.search + parsedUrl.hash;
+    }
+    
+    return parsedUrl.toString();
+  } catch (err) {
+    return urlStr;
+  }
+}
+
+function cleanDataForExport(data, excludeIcons, cleanUrls) {
+  // Funzione ricorsiva per ripulire le icone, gli URL ed evitare modifiche in-place
   if (Array.isArray(data)) {
-    return data.map(item => cleanDataForExport(item, excludeIcons));
+    return data.map(item => cleanDataForExport(item, excludeIcons, cleanUrls));
   } else if (typeof data === 'object' && data !== null) {
     const cleaned = { ...data };
     if (excludeIcons && 'icon' in cleaned) {
       delete cleaned.icon;
     }
+    if (cleanUrls && 'url' in cleaned) {
+      cleaned.url = cleanUrl(cleaned.url);
+    }
     if ('children' in cleaned && Array.isArray(cleaned.children)) {
-      cleaned.children = cleanDataForExport(cleaned.children, excludeIcons);
+      cleaned.children = cleanDataForExport(cleaned.children, excludeIcons, cleanUrls);
     }
     return cleaned;
   }
@@ -1895,10 +2035,10 @@ function updateCompareExportOutput() {
   let filename = 'report_confronto.json';
 
   const cleanResults = {
-    added: cleanDataForExport(appState.comparisonResults.added, appState.compareExcludeIcons),
-    removed: cleanDataForExport(appState.comparisonResults.removed, appState.compareExcludeIcons),
-    modified: cleanDataForExport(appState.comparisonResults.modified, appState.compareExcludeIcons),
-    identical: cleanDataForExport(appState.comparisonResults.identical, appState.compareExcludeIcons)
+    added: cleanDataForExport(appState.comparisonResults.added, appState.compareExcludeIcons, appState.compareCleanUrls),
+    removed: cleanDataForExport(appState.comparisonResults.removed, appState.compareExcludeIcons, appState.compareCleanUrls),
+    modified: cleanDataForExport(appState.comparisonResults.modified, appState.compareExcludeIcons, appState.compareCleanUrls),
+    identical: cleanDataForExport(appState.comparisonResults.identical, appState.compareExcludeIcons, appState.compareCleanUrls)
   };
 
   switch (format) {
@@ -1965,4 +2105,103 @@ function downloadCompareReportFile() {
   }, 100);
   
   showToast('Download del report avviato!');
+}
+
+// --- GESTIONE VISTA GRAFICA ---
+function switchContentView(view) {
+  appState.currentView = view;
+  if (view === 'table') {
+    elements.tabBtnTable.classList.add('active');
+    elements.tabBtnGraph.classList.remove('active');
+    elements.secTableView.classList.remove('hidden');
+    elements.secGraphView.classList.add('hidden');
+  } else {
+    elements.tabBtnTable.classList.remove('active');
+    elements.tabBtnGraph.classList.add('active');
+    elements.secTableView.classList.add('hidden');
+    elements.secGraphView.classList.remove('hidden');
+    renderVisuals();
+  }
+}
+
+function switchGraphType(type) {
+  appState.graphType = type;
+  if (type === 'force') {
+    elements.btnGraphTypeForce.classList.add('active');
+    elements.btnGraphTypeSunburst.classList.remove('active');
+  } else {
+    elements.btnGraphTypeForce.classList.remove('active');
+    elements.btnGraphTypeSunburst.classList.add('active');
+  }
+  renderVisuals();
+}
+
+function renderVisuals() {
+  if (appState.currentView !== 'graph' || !appState.parsedTree || appState.parsedTree.length === 0) return;
+  
+  let graphData = appState.parsedTree;
+  let rootTitle = "Tutti i Preferiti";
+  
+  if (appState.activeFolderFilter && appState.activeFolderFilter.length > 0) {
+    const folderNode = findFolderByPath(appState.parsedTree, appState.activeFolderFilter);
+    if (folderNode) {
+      graphData = folderNode;
+      rootTitle = folderNode.title;
+    }
+  }
+  
+  renderVisualGraph('graph-canvas-container', graphData, {
+    graphType: appState.graphType,
+    showLinks: appState.graphShowLinks,
+    rootTitle: rootTitle
+  }, (selectedPath) => {
+    selectFolderByPath(selectedPath);
+  });
+}
+
+function findFolderByPath(nodes, path) {
+  if (!path || path.length === 0) return null;
+  const targetName = path[0];
+  const remaining = path.slice(1);
+  
+  for (const node of nodes) {
+    if (node.type === 'folder' && node.title === targetName) {
+      if (remaining.length === 0) {
+        return node;
+      } else {
+        return findFolderByPath(node.children, remaining);
+      }
+    }
+  }
+  return null;
+}
+
+function expandFolderByPath(nodes, path) {
+  if (!path || path.length === 0) return;
+  const targetName = path[0];
+  const remaining = path.slice(1);
+  
+  for (const node of nodes) {
+    if (node.type === 'folder' && node.title === targetName) {
+      node.expanded = true;
+      expandFolderByPath(node.children, remaining);
+      break;
+    }
+  }
+}
+
+function selectFolderByPath(folderPath) {
+  appState.activeFolderFilter = folderPath;
+  appState.currentPage = 1;
+  
+  // Espande e evidenzia lo stato attivo nell'albero sidebar
+  expandFolderByPath(appState.parsedTree, folderPath);
+  renderFolderTree();
+  
+  // Applica filtri
+  applyFiltersAndRenderTable();
+  updateExportScopeBanner();
+  
+  // Ri-disegna il grafico per rispecchiare la nuova selezione
+  renderVisuals();
 }

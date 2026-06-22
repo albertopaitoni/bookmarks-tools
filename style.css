@@ -1267,6 +1267,14 @@ body {
   font-weight: 500;
 }
 
+.export-options-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
 .code-output-container {
   border: 1px solid var(--border-color);
   border-radius: 12px;
@@ -1559,5 +1567,281 @@ body {
 .col-status {
   width: 110px;
   text-align: center;
+}
+
+/* Content View Switch Tabs */
+.content-tabs-nav {
+  display: flex;
+  margin-bottom: 1.5rem;
+  padding: 0.35rem;
+  border-radius: 12px;
+  gap: 0.5rem;
+}
+
+.content-tabs-nav .btn-tab {
+  border-radius: 8px;
+  border-bottom: none;
+  padding: 0.5rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background-color: transparent;
+  color: var(--text-secondary);
+  transition: var(--transition-smooth);
+}
+
+.content-tabs-nav .btn-tab:hover {
+  color: var(--text-primary);
+  background-color: hsla(217, 30%, 18%, 0.4);
+}
+
+.content-tabs-nav .btn-tab.active {
+  color: var(--text-primary);
+  background-color: var(--secondary);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+}
+
+/* Visual Graph Section */
+.graph-header-flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.graph-title-desc {
+  flex: 1;
+  min-width: 250px;
+}
+
+.graph-controls {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.graph-options-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.graph-canvas-wrapper {
+  position: relative;
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-top: 1rem;
+  background: radial-gradient(circle at center, hsla(222, 30%, 10%, 0.8) 0%, hsla(222, 47%, 4%, 0.95) 100%);
+  border: 1px solid var(--border-color);
+}
+
+.graph-canvas-container {
+  width: 100%;
+  height: 550px;
+  cursor: grab;
+}
+
+.graph-canvas-container:active {
+  cursor: grabbing;
+}
+
+/* Tooltip style */
+.graph-tooltip {
+  position: absolute;
+  background: hsla(222, 30%, 12%, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-hover);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  pointer-events: none;
+  z-index: 100;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 0 10px rgba(124, 58, 237, 0.15);
+  max-width: 320px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--text-primary);
+  transition: opacity 0.15s ease-out;
+}
+
+.graph-tooltip h4 {
+  font-family: var(--font-title);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.graph-tooltip .tooltip-meta {
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+}
+
+.graph-tooltip .tooltip-url {
+  color: var(--accent-blue);
+  word-break: break-all;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  margin-top: 0.35rem;
+  border-top: 1px solid hsla(217, 30%, 25%, 0.5);
+  padding-top: 0.35rem;
+}
+
+/* Legend */
+.graph-legend {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  display: flex;
+  gap: 1rem;
+  background: hsla(222, 30%, 8%, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  pointer-events: none;
+  z-index: 10;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.legend-dot.color-folder {
+  background-color: var(--accent-violet);
+  box-shadow: 0 0 6px var(--accent-violet);
+}
+
+.legend-dot.color-bookmark {
+  background-color: var(--accent-blue);
+  box-shadow: 0 0 6px var(--accent-blue);
+}
+
+/* D3 Graph Elements */
+.graph-link {
+  fill: none;
+  stroke: hsla(217, 30%, 35%, 0.45);
+  stroke-width: 1.5px;
+  transition: stroke 0.25s, stroke-width 0.25s;
+}
+
+.graph-link.highlighted {
+  stroke: var(--accent-violet);
+  stroke-width: 2.5px;
+  opacity: 0.85;
+}
+
+.graph-node {
+  cursor: pointer;
+}
+
+.graph-node circle {
+  stroke-width: 2px;
+  transition: r 0.2s ease, stroke-width 0.2s ease, fill 0.2s ease;
+}
+
+.graph-node--folder circle {
+  fill: var(--bg-card);
+  stroke: var(--accent-violet);
+  filter: drop-shadow(0 0 4px hsla(270, 95%, 65%, 0.5));
+}
+
+.graph-node--folder.collapsed circle {
+  fill: var(--accent-violet);
+}
+
+.graph-node--folder:hover circle {
+  stroke-width: 3px;
+  r: 12;
+  filter: drop-shadow(0 0 8px var(--accent-violet));
+}
+
+.graph-node--bookmark circle {
+  fill: var(--accent-blue);
+  stroke: hsla(200, 100%, 50%, 0.5);
+}
+
+.graph-node--bookmark:hover circle {
+  stroke-width: 3px;
+  stroke: var(--text-primary);
+  r: 7;
+  filter: drop-shadow(0 0 6px var(--accent-blue));
+}
+
+.graph-node-label {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  fill: var(--text-secondary);
+  pointer-events: none;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+  transition: fill 0.2s, font-weight 0.2s;
+}
+
+.graph-node:hover .graph-node-label {
+  fill: var(--text-primary);
+  font-weight: 500;
+}
+
+/* Sunburst Specific */
+.sunburst-slice {
+  cursor: pointer;
+  stroke: var(--bg-primary);
+  stroke-width: 1px;
+  transition: opacity 0.2s, filter 0.2s;
+}
+
+.sunburst-slice:hover {
+  filter: brightness(1.2) drop-shadow(0 0 6px rgba(255, 255, 255, 0.15));
+}
+
+.sunburst-center {
+  cursor: pointer;
+  fill: var(--bg-card);
+  stroke: var(--border-color);
+  stroke-width: 1px;
+  transition: fill 0.25s;
+}
+
+.sunburst-center:hover {
+  fill: hsla(217, 30%, 18%, 0.6);
+}
+
+.sunburst-center-text {
+  font-family: var(--font-title);
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--text-primary);
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.sunburst-center-subtext {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  fill: var(--text-secondary);
+  text-anchor: middle;
+  pointer-events: none;
 }
 
