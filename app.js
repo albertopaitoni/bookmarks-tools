@@ -1,12 +1,8 @@
-/**
- * app.js
- * Controller per la gestione dell'interfaccia utente, del flusso di lavoro
- * e delle esportazioni del convertitore di preferiti bookmarks tools.
- */
+// app.js - Controller UI & workflow Bookmarks Tools
 
-import { parseBookmarks, flattenBookmarks, decompressMozLz4 } from './parser.js';
-import { compareBookmarks, generateCompareCSV, generateCompareMarkdown } from './comparator.js';
-import { renderVisualGraph, resetZoom as graphResetZoom } from './visualization.js';
+import { parseBookmarks, flattenBookmarks, decompressMozLz4 } from './parser.js?v=2.1.0';
+import { compareBookmarks, generateCompareCSV, generateCompareMarkdown } from './comparator.js?v=2.1.0';
+import { renderVisualGraph, resetZoom as graphResetZoom } from './visualization.js?v=2.1.0';
 
 // --- STATO DELL'APPLICAZIONE ---
 let appState = {
@@ -842,12 +838,12 @@ function processBookmarksData(shouldScroll = true) {
   }
   
   showLoader('Analisi dei preferiti HTML in corso...');
-  
-  // Utilizziamo setTimeout per permettere all'interfaccia di renderizzare il loader
   setTimeout(() => {
     try {
       // 1. Parsing ad albero
+      console.log('[v2.1.0] HTML len:', htmlContent ? htmlContent.length : 0);
       const rawTree = parseBookmarks(htmlContent);
+      console.log('[v2.1.0] RawTree nodi:', rawTree ? rawTree.length : 0);
       if (!rawTree || rawTree.length === 0) {
         throw new Error('Nessun preferito estratto. Assicurati che sia un file di preferiti HTML valido.');
       }
@@ -3684,5 +3680,3 @@ function getDomainFromUrl(url) {
     return url;
   }
 }
-
-

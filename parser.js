@@ -37,57 +37,37 @@ export function parseBookmarks(htmlContent) {
 
   const parser = new DOMParser();
   const doc = parser.parseFromString(htmlContent, 'text/html');
-  const rootDL = doc.querySelector('dl') || doc.querySelector('DL') || doc.body;
+  const rootContainer = doc.body || doc.documentElement || doc;
 
-  function traverseDL(dl, folderPath = []) {
+  function traverseContainer(container, folderPath = []) {
     const list = [];
-    if (!dl) return list;
+    if (!container) return list;
     
-    const children = Array.from(dl.children);
+    const children = Array.from(container.children);
     
     for (let i = 0; i < children.length; i++) {
       const child = children[i];
       const tagName = child.tagName.toUpperCase();
       
-      if (tagName === 'DT') {
-        const a = child.querySelector(':scope > a') || child.querySelector(':scope > A');
-        const h3 = child.querySelector(':scope > h3') || child.querySelector(':scope > H3');
+      if (tagName === 'DT' || tagName === 'LI') {
+        const h3 = child.querySelector(':scope > h3, :scope > H3, :scope > h2, :scope > H2') ||
+                   (child.tagName === 'H3' || child.tagName === 'H2' ? child : null) ||
+                   child.querySelector('h3, H3, h2, H2');
         
-        if (a) {
-          const url = a.getAttribute('href') || '';
-          const addDateVal = a.getAttribute('add_date') || a.getAttribute('ADD_DATE') || '';
-          const icon = a.getAttribute('icon') || a.getAttribute('ICON') || '';
-          const title = a.textContent.trim();
-          
-          let addDate = '';
-          if (addDateVal) {
-            const timestamp = parseInt(addDateVal) * 1000;
-            if (!isNaN(timestamp)) {
-              addDate = new Date(timestamp).toISOString();
-            }
-          }
-          
-          list.push({
-            type: 'bookmark',
-            title: title || url, // Fallback se il titolo è vuoto
-            url,
-            addDate,
-            icon,
-            folderPath: [...folderPath]
-          });
-        } else if (h3) {
+        if (h3) {
           // Trovata intestazione cartella. Cerchiamo il relativo DL contenitore.
-          let subDL = child.querySelector(':scope > dl') || child.querySelector(':scope > DL');
+          let subDL = child.querySelector(':scope > dl, :scope > DL, :scope > ul, :scope > UL') ||
+                      child.querySelector('dl, DL, ul, UL');
           if (!subDL) {
             // Se non è dentro al DT, cerchiamo il fratello DL successivo
             for (let j = i + 1; j < children.length; j++) {
               const sibling = children[j];
               const siblingTag = sibling.tagName.toUpperCase();
-              if (siblingTag === 'DL') {
+              if (siblingTag === 'DL' || siblingTag === 'UL') {
                 subDL = sibling;
                 i = j; // Salta il DL nel ciclo principale per non analizzarlo due volte
                 break;
-              } else if (siblingTag === 'DT') {
+              } else if (siblingTag === 'DT' || siblingTag === 'LI') {
                 break; // Un altro DT significa che questa cartella non ha DL associati (vuota)
               }
             }
@@ -95,7 +75,7 @@ export function parseBookmarks(htmlContent) {
           
           const folderName = h3.textContent.trim();
           const nextPath = [...folderPath, folderName];
-          const subItems = subDL ? traverseDL(subDL, nextPath) : [];
+          const subItems = subDL ? traverseContainer(subDL, nextPath) : [];
           
           list.push({
             type: 'folder',
@@ -103,17 +83,149 @@ export function parseBookmarks(htmlContent) {
             folderPath: folderPath,
             children: subItems
           });
+        } else {
+          // Non è una cartella, cerchiamo il tag <a> del preferito
+          const a = child.querySelector(':scope > a, :scope > A') ||
+                    child.querySelector('a, A') ||
+                    (child.tagName === 'A' ? child : null);
+          
+          if (a) {
+            const url = a.getAttribute('href') || a.getAttribute('HREF') || '';
+            const addDateVal = a.getAttribute('add_date') || a.getAttribute('ADD_DATE') || '';
+            const icon = a.getAttribute('icon') || a.getAttribute('ICON') || '';
+            const title = a.textContent.trim() || a.getAttribute('title') || '';
+            
+            let addDate = '';
+            if (addDateVal) {
+              let ts = parseInt(addDateVal);
+              if (!isNaN(ts)) {
+                if (ts > 1e15) {
+                  ts = Math.floor((ts - 11644473600000000) / 1000);
+                } else if (ts <= 1e11) {
+                  ts = ts * 1000;
+                }
+                if (ts > 0 && !isNaN(ts)) {
+                  addDate = new Date(ts).toISOString();
+                }
+              }
+            }
+            
+            list.push({
+              type: 'bookmark',
+              title: title || url, // Fallback se il titolo è vuoto
+              url,
+              addDate,
+              icon,
+              folderPath: [...folderPath]
+            });
+          }
         }
-      } else if (tagName === 'DL') {
-        // Se un DL si trova a livello radice senza DT contenitore, analizziamo i suoi figli
-        const subItems = traverseDL(child, folderPath);
+      } else if (tagName === 'DL' || tagName === 'UL' || tagName === 'OL' || tagName === 'DIV' || tagName === 'SECTION' || tagName === 'MAIN' || tagName === 'NAV' || tagName === 'ARTICLE' || tagName === 'TABLE' || tagName === 'TBODY' || tagName === 'TR' || tagName === 'TD') {
+        // Se un contenitore si trova a livello radice o intermedio senza DT contenitore, analizziamo i suoi figli
+        const subItems = traverseContainer(child, folderPath);
+        list.push(...subItems);
+      } else if (tagName === 'A') {
+        // Nel caso in cui un tag <a> si trovi direttamente come figlio (senza wrapper <dt>)
+        const url = child.getAttribute('href') || child.getAttribute('HREF') || '';
+        const addDateVal = child.getAttribute('add_date') || child.getAttribute('ADD_DATE') || '';
+        const icon = child.getAttribute('icon') || child.getAttribute('ICON') || '';
+        const title = child.textContent.trim() || child.getAttribute('title') || '';
+        
+        let addDate = '';
+        if (addDateVal) {
+          let ts = parseInt(addDateVal);
+          if (!isNaN(ts)) {
+            if (ts > 1e15) {
+              ts = Math.floor((ts - 11644473600000000) / 1000);
+            } else if (ts <= 1e11) {
+              ts = ts * 1000;
+            }
+            if (ts > 0 && !isNaN(ts)) {
+              addDate = new Date(ts).toISOString();
+            }
+          }
+        }
+        
+        list.push({
+          type: 'bookmark',
+          title: title || url,
+          url,
+          addDate,
+          icon,
+          folderPath: [...folderPath]
+        });
+      } else if (tagName === 'P' && child.children.length > 0) {
+        // Se un tag <p> contiene elementi figli (es. preferiti o DL)
+        const subItems = traverseContainer(child, folderPath);
         list.push(...subItems);
       }
     }
     return list;
   }
   
-  return traverseDL(rootDL, []);
+  let tree = traverseContainer(rootContainer, []);
+
+  // Fail-safe di emergenza: se l'analisi ricorsiva non ha estratto preferiti ma nel documento esistono tag <a href="...">
+  if (!tree || tree.length === 0 || flattenBookmarks(tree).length === 0) {
+    const allAnchors = Array.from(doc.querySelectorAll('a[href], A[HREF], a[HREF], A[href]'));
+    if (allAnchors.length > 0) {
+      console.warn('BookmarksTools: attivato fallback di estrazione link globale (trovati ' + allAnchors.length + ' elementi).');
+      const fallbackList = [];
+      for (const a of allAnchors) {
+        const url = a.getAttribute('href') || a.getAttribute('HREF') || '';
+        if (!url || url.startsWith('javascript:')) continue;
+        
+        const title = a.textContent.trim() || a.getAttribute('title') || url;
+        const addDateVal = a.getAttribute('add_date') || a.getAttribute('ADD_DATE') || '';
+        const icon = a.getAttribute('icon') || a.getAttribute('ICON') || '';
+        
+        let addDate = '';
+        if (addDateVal) {
+          let ts = parseInt(addDateVal);
+          if (!isNaN(ts)) {
+            if (ts > 1e15) {
+              ts = Math.floor((ts - 11644473600000000) / 1000);
+            } else if (ts <= 1e11) {
+              ts = ts * 1000;
+            }
+            if (ts > 0 && !isNaN(ts)) {
+              addDate = new Date(ts).toISOString();
+            }
+          }
+        }
+        
+        let folderPath = [];
+        let curr = a.parentElement;
+        while (curr && curr !== doc.body && curr !== doc.documentElement) {
+          const prev = curr.previousElementSibling;
+          if (prev && (prev.tagName === 'H3' || prev.tagName === 'H2')) {
+            folderPath.unshift(prev.textContent.trim());
+            break;
+          }
+          const insideH3 = curr.querySelector('h3, H3, h2, H2');
+          if (insideH3 && insideH3 !== a) {
+            folderPath.unshift(insideH3.textContent.trim());
+            break;
+          }
+          curr = curr.parentElement;
+        }
+
+        fallbackList.push({
+          type: 'bookmark',
+          title: title,
+          url: url,
+          addDate: addDate,
+          icon: icon,
+          folderPath: folderPath
+        });
+      }
+      if (fallbackList.length > 0) {
+        tree = fallbackList;
+      }
+    }
+  }
+
+  return tree;
 }
 
 /**

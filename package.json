@@ -2,9 +2,10 @@
   "name": "convertitore-preferiti",
   "version": "1.0.0",
   "description": "Convertitore Premium di Preferiti HTML in JSON, CSV, MD e SQL",
+  "type": "module",
   "main": "app.js",
   "scripts": {
-    "dev": "npx sirv-cli . --port 3000 --cors --single"
+    "dev": "npx sirv-cli . --port 3000 --cors --single --dev"
   },
   "keywords": [
     "bookmarks",
