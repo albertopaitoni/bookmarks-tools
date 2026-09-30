@@ -9,6 +9,23 @@ import { openBookmarkUrl } from './urls.js';
 let forceSimulation = null;
 let currentZoom = null;
 let currentSvg = null;
+let zoomTimer = null;
+
+export function stopVisualGraph() {
+  clearTimeout(zoomTimer);
+  zoomTimer = null;
+  if (forceSimulation) {
+    forceSimulation.stop();
+    forceSimulation = null;
+  }
+  if (currentSvg) {
+    currentSvg.interrupt();
+    currentSvg.selectAll('*').interrupt();
+  }
+  currentSvg = null;
+  currentZoom = null;
+  hideTooltip();
+}
 
 /**
  * Renderizza il grafico interattivo corretto in base alle opzioni fornite.
@@ -24,13 +41,7 @@ export function renderVisualGraph(containerId, data, options, onFolderSelected) 
   // Svuota il container
   container.innerHTML = '';
   
-  // Arresta simulazioni precedenti se attive
-  if (forceSimulation) {
-    forceSimulation.stop();
-    forceSimulation = null;
-  }
-  currentSvg = null;
-  currentZoom = null;
+  stopVisualGraph();
 
   if (!data || (Array.isArray(data) && data.length === 0)) {
     container.innerHTML = `<div class="empty-state-message" style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-secondary); padding: 2rem; text-align: center;">
@@ -104,6 +115,8 @@ function drawForceGraph(container, treeData, options, onFolderSelected) {
 
   // Inizializza la gerarchia D3
   const d3Root = d3.hierarchy(treeData, d => d.children);
+  // Identificatori permanenti, assegnati prima di nascondere i discendenti.
+  d3Root.descendants().forEach((node, i) => { node.id = i + 1; });
 
   // Collassa i nodi più profondi del livello 1 per impostazione predefinita per evitare affollamento
   d3Root.descendants().forEach(d => {
@@ -125,10 +138,6 @@ function drawForceGraph(container, treeData, options, onFolderSelected) {
 
   // Funzione di aggiornamento grafico del grafo
   function update() {
-    // Assegna ID univoci
-    let i = 0;
-    d3Root.each(d => { d.id = d.id || ++i; });
-
     const nodes = d3Root.descendants();
     const links = d3Root.links();
 
@@ -231,7 +240,8 @@ function drawForceGraph(container, treeData, options, onFolderSelected) {
   update();
   
   // Centra il grafo all'avvio
-  setTimeout(() => {
+  zoomTimer = setTimeout(() => {
+    zoomTimer = null;
     resetZoom(width, height);
   }, 300);
 }
@@ -314,7 +324,7 @@ function drawSunburstChart(container, treeData, options, onFolderSelected) {
     .outerRadius(d => d.y1 * radius / (root.height + 1) - 1);
 
   // Schema Colori HSL per le cartelle
-  const colorScale = d3.scaleRainbow();
+  const colorScale = d3.scaleSequential(d3.interpolateRainbow);
 
   // Memorizza la radice corrente della vista (per gestire lo zoom)
   let currentRoot = root;

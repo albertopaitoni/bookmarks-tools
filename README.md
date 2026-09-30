@@ -59,10 +59,10 @@ L'applicazione è sviluppata interamente in modalità vanilla client-side per ga
 - **Struttura**: [HTML5](https://developer.mozilla.org/it/docs/Web/HTML) semantico.
 - **Stile**: [Vanilla CSS3](https://developer.mozilla.org/it/docs/Web/CSS) con variabili personalizzate, layout flessibili, glassmorphism e animazioni fluide.
 - **Logica**: [JavaScript ES Modules](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules) nativo.
-- **Librerie Esterne (via CDN)**:
-  - [D3.js v7](https://d3js.org/): Per il rendering del grafo a nodi e del sunburst chart.
-  - [QRious](https://github.com/neocotic/qrious): Per la generazione dei codici QR.
-- **Font**: *Outfit* per i titoli e *Inter* per il testo, importati da Google Fonts.
+- **Librerie distribuite localmente (`vendor/`)**:
+  - [D3.js 7.9.0](https://d3js.org/): Per il rendering del grafo a nodi e del sunburst chart.
+  - [QRious 4.0.2](https://github.com/neocotic/qrious): Per la generazione dei codici QR.
+- **Font**: *Outfit* per i titoli e *Inter* per il testo, distribuiti localmente insieme alle licenze di Google Fonts.
 
 * * *
 
@@ -73,13 +73,33 @@ bookmarks-tools/
 ├── esempi/                       # File HTML di esempio per test e demo
 │   ├── compare_example_old.html  # Versione precedente per il confronto
 │   └── compare_example_new.html  # Versione aggiornata per il confronto
-├── app.js                        # Controller principale dell'applicazione (Gestione UI, stato e interazioni)
-├── parser.js                     # Algoritmo di parsing e formattazione dei preferiti HTML/JSON
-├── comparator.js                 # Logica di confronto tra file e generazione report diff
-├── visualization.js              # Rendering di grafici interattivi (Grafo a nodi / Sunburst) tramite D3.js
+├── src/                          # Codice dell'applicazione
+│   ├── app.js                    # Controller principale (UI e interazioni)
+│   ├── state.js                  # Stato condiviso della UI
+│   ├── query.js                  # Ricerca, cache e ordinamento
+│   ├── parser.js                 # Parsing e formattazione dei preferiti HTML/JSON
+│   ├── comparator.js             # Confronto e report diff
+│   ├── processing.js             # Decodifica, parsing JSON e confronto
+│   ├── processing-worker.js      # Elaborazioni fuori dal thread della UI
+│   ├── worker-client.js          # Richieste al worker e fallback
+│   ├── exporters.js              # Esportatori CSV, Markdown e SQL
+│   ├── export-utils.js           # Escaping delle esportazioni
+│   ├── dates.js                  # Formattazione date e timestamp originali
+│   ├── urls.js                   # Validazione e apertura dei link
+│   ├── visualization.js          # Grafici interattivi D3.js
+│   └── styles/
+│       └── style.css             # Stili, layout e animazioni
+├── docs/
+│   └── MIGLIORAMENTI.md          # Interventi applicati e margini residui
+├── tests/                        # Test di regressione
+├── scripts/                      # Strumenti di sviluppo e verifica
+│   ├── dev-server.js             # Server locale Node senza dipendenze
+│   ├── browser-smoke.js          # Verifica completa nel browser
+│   └── benchmark.js              # Misure delle prestazioni
+├── vendor/                       # Librerie, font e relative licenze
 ├── index.html                    # Pagina principale e struttura dell'applicazione
-├── style.css                     # Fogli di stile (Design System, layout e animazioni)
 ├── package.json                  # Script e configurazione per il server di sviluppo locale
+├── package-lock.json             # Versioni delle dipendenze di sviluppo
 └── README.md                     # Questo file di documentazione
 ```
 
@@ -94,17 +114,43 @@ Per eseguire e testare l'applicazione sul proprio computer, assicurarsi di aver 
    cd bookmarks-tools
    ```
 
-2. **Installa le dipendenze** (necessarie solo per avviare il web server locale di sviluppo):
-   ```bash
-   npm install
-   ```
-
-3. **Avvia le server di sviluppo**:
+2. **Avvia il server di sviluppo** (Node.js 22 o successivo; nessuna installazione richiesta):
    ```bash
    npm run dev
    ```
 
-4. **Apri il browser** all'indirizzo indicato (solitamente `http://localhost:3000`).
+3. **Apri il browser** all'indirizzo [http://127.0.0.1:3000](http://127.0.0.1:3000).
+
+Librerie e font sono locali: l'applicazione funziona anche senza accesso ai CDN. Il server ascolta solo su loopback. Per usare un'altra porta, imposta la variabile `PORT`.
+
+## Verifiche
+
+```bash
+npm test
+npm run benchmark
+```
+
+Per il test completo nel browser, installa la dipendenza di sviluppo fissata nel lockfile e Chromium:
+
+```bash
+npm ci
+npx playwright install chromium
+npm run test:browser
+```
+
+Su Windows puoi usare Edge già installato, evitando il download di Chromium:
+
+```powershell
+npm ci
+$env:BROWSER_CHANNEL = 'msedge'
+npm run test:browser
+```
+
+Il test browser avvia e chiude da solo un server su una porta libera. Verifica gli esempi HTML, importazione JSON, filtri, esportazioni, date, grafici, QR e Web Worker, bloccando le richieste esterne. `PLAYWRIGHT_MODULE_PATH` permette di usare una distribuzione di Playwright già disponibile nell'ambiente.
+
+Parsing JSON, decompressione Firefox e confronto vengono eseguiti in un Web Worker. Il parsing HTML resta nel thread principale, dove è disponibile `DOMParser`. Se il worker non è disponibile, viene usata la stessa logica nel thread principale.
+
+Le esportazioni CSV neutralizzano i valori interpretabili come formule anteponendo un apostrofo. Markdown esegue l'escaping di titoli e cartelle e rende i protocolli non ammessi come testo semplice. JSON mantiene i dati originali.
 
 * * *
 

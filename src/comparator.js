@@ -1,3 +1,5 @@
+import { escapeCSV, escapeMarkdown, markdownLink } from './export-utils.js';
+
 /**
  * comparator.js
  * Algoritmo di confronto per due file di preferiti HTML (versione precedente e successiva).
@@ -166,12 +168,6 @@ export function generateCompareCSV(results) {
   const allRows = [];
   let index = 1;
 
-  const escapeCSV = (val) => {
-    if (val === undefined || val === null) return '""';
-    const str = val.replace(/"/g, '""');
-    return `"${str}"`;
-  };
-
   // Aggiunti
   results.added.forEach(b => {
     allRows.push([
@@ -255,8 +251,8 @@ export function generateCompareMarkdown(results) {
     md += '*Nessun preferito aggiunto.*\n\n';
   } else {
     results.added.forEach(b => {
-      const folderStr = b.folderPath.length > 0 ? ` [${b.folderPath.join(' / ')}]` : '';
-      md += `- [${b.title || b.url}](${b.url})${folderStr}\n`;
+      const folderStr = b.folderPath.length > 0 ? ` [${escapeMarkdown(b.folderPath.join(' / '))}]` : '';
+      md += `- ${markdownLink(b.title, b.url)}${folderStr}\n`;
     });
     md += '\n';
   }
@@ -267,8 +263,8 @@ export function generateCompareMarkdown(results) {
     md += '*Nessun preferito rimosso.*\n\n';
   } else {
     results.removed.forEach(b => {
-      const folderStr = b.folderPath.length > 0 ? ` [${b.folderPath.join(' / ')}]` : '';
-      md += `- ~~[${b.title || b.url}](${b.url})~~${folderStr}\n`;
+      const folderStr = b.folderPath.length > 0 ? ` [${escapeMarkdown(b.folderPath.join(' / '))}]` : '';
+      md += `- ~~${markdownLink(b.title, b.url)}~~${folderStr}\n`;
     });
     md += '\n';
   }
@@ -279,14 +275,14 @@ export function generateCompareMarkdown(results) {
     md += '*Nessun preferito modificato.*\n\n';
   } else {
     results.modified.forEach(b => {
-      md += `- [Link](${b.url})\n`;
+      md += `- ${markdownLink('Link', b.url)}\n`;
       if (b.titleChanged) {
-        md += `  - **Titolo:** "${b.oldTitle}" &rarr; "${b.newTitle}"\n`;
+        md += `  - **Titolo:** "${escapeMarkdown(b.oldTitle)}" &rarr; "${escapeMarkdown(b.newTitle)}"\n`;
       }
       if (b.folderChanged) {
         const oldP = b.oldFolderPath.length > 0 ? b.oldFolderPath.join(' / ') : 'Radice';
         const newP = b.newFolderPath.length > 0 ? b.newFolderPath.join(' / ') : 'Radice';
-        md += `  - **Cartella:** [${oldP}] &rarr; [${newP}]\n`;
+        md += `  - **Cartella:** [${escapeMarkdown(oldP)}] &rarr; [${escapeMarkdown(newP)}]\n`;
       }
     });
     md += '\n';
@@ -298,8 +294,8 @@ export function generateCompareMarkdown(results) {
     md += '*Nessun preferito identico.*\n\n';
   } else {
     results.identical.forEach(b => {
-      const folderStr = b.folderPath.length > 0 ? ` [${b.folderPath.join(' / ')}]` : '';
-      md += `- [${b.title || b.url}](${b.url})${folderStr}\n`;
+      const folderStr = b.folderPath.length > 0 ? ` [${escapeMarkdown(b.folderPath.join(' / '))}]` : '';
+      md += `- ${markdownLink(b.title, b.url)}${folderStr}\n`;
     });
     md += '\n';
   }

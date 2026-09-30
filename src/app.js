@@ -1,74 +1,27 @@
 // app.js - Controller UI & workflow Bookmarks Tools
 import { safeBookmarkUrl, openBookmarkUrl } from './urls.js';
+import { appState } from './state.js';
 
-import { parseBookmarks, flattenBookmarks, decompressMozLz4 } from './parser.js?v=2.1.0';
-import { compareBookmarks, generateCompareCSV, generateCompareMarkdown } from './comparator.js?v=2.1.0';
-import { renderVisualGraph, resetZoom as graphResetZoom } from './visualization.js?v=2.1.0';
+import { flattenBookmarks } from './parser.js?v=2.1.0';
+import { createBookmarkQuery, debounce } from './query.js';
+import { runProcessingTask, disposeProcessingWorker } from './worker-client.js';
+import { generateCSV, generateMarkdown, generateSQL } from './exporters.js';
+import { formatTreeDates } from './dates.js';
+import { generateCompareCSV, generateCompareMarkdown } from './comparator.js?v=2.1.0';
+import { renderVisualGraph, resetZoom as graphResetZoom, stopVisualGraph } from './visualization.js?v=2.1.0';
 
 // --- STATO DELL'APPLICAZIONE ---
-let appState = {
-  currentMode: 'convert', // convert or compare
-  
-  // Modalità Convertitore
-  originalHtml: '',
-  parsedTree: [],
-  flatBookmarks: [],
-  filteredBookmarks: [],
-  
-  // Tabella paginata convertitore
-  currentPage: 1,
-  itemsPerPage: 15,
-  searchQuery: '',
-  activeFolderFilter: null, // array representing path or null
-  sortColumn: 'idx',
-  sortDirection: 'asc',
-  
-  // Vista Grafica
-  currentView: 'table', // table or graph
-  graphType: 'force', // force or sunburst
-  graphShowLinks: true,
-  
-  // Esportazioni convertitore
-  currentExportFormat: 'json-flat',
-  excludeIcons: true,
-  dateFormat: 'iso', // iso, unix, locale
-  exportOnlyFolder: false, // esporta solo cartella visualizzata
-  cleanUrls: false,
-
-  // Stato Albero
-  showLinksInTree: false,
-  treeSearchQuery: '',
-
-  // Modalità Confrontatore
-  fileA: { name: '', size: 0, rawHtml: '', parsedTree: [], flatBookmarks: [] },
-  fileB: { name: '', size: 0, rawHtml: '', parsedTree: [], flatBookmarks: [] },
-  compareExcludeIcons: true,
-  compareDateFormat: 'iso',
-  compareCleanUrls: false,
-  comparisonResults: null,
-  filteredCompareList: [],
-  compareCurrentFilter: 'all', // all, added, removed, modified, identical
-  compareCurrentPage: 1,
-  compareItemsPerPage: 15,
-  compareSearchQuery: '',
-  compareExportFormat: 'json', // json, csv, markdown
-
-  // La Macchina del Tempo (Timeline Nostalgia)
-  timelineActive: false,
-  timelineRange: [],
-  timelineSelectedIndex: -1,
-  timelinePlaying: false,
-  timelineInterval: null,
-
-  // Stato Esplora
-  exploreActiveSubTab: 'tarot', // 'tarot' or 'wrapped'
-  tarotNumCards: 3,
-  tarotPrioritizeOld: true,
-  tarotHand: [], // preferiti attualmente in mano: { bookmark, flipped }
-  wrappedCurrentSlide: 0,
-  wrappedStats: null,
-};
-
+const scheduleTableSearch = debounce(() => { appState.currentPage = 1; applyFiltersAndRenderTable(); });
+const scheduleTreeSearch = debounce(() => renderFolderTree());
+const scheduleCompareSearch = debounce(() => { appState.compareCurrentPage = 1; applyCompareFiltersAndRenderTable(); });
+let processingRevision = 0;
+const fileReadRevisions = { convert: 0, A: 0, B: 0 };
+window.addEventListener('pagehide', () => {
+  stopVisualGraph();
+  stopTimelinePlay();
+  scheduleTableSearch.cancel(); scheduleTreeSearch.cancel(); scheduleCompareSearch.cancel();
+  disposeProcessingWorker();
+});
 // --- DOM ELEMENTS ---
 const elements = {
   // Input
@@ -409,7 +362,7 @@ function setupEventListeners() {
   elements.tableSearch.addEventListener('input', (e) => {
     appState.searchQuery = e.target.value;
     appState.currentPage = 1;
-    applyFiltersAndRenderTable();
+    scheduleTableSearch();
   });
   
   // Ordinamento tabella
@@ -503,7 +456,7 @@ function setupEventListeners() {
   // Eventi per i controlli dell'albero
   elements.treeSearchInput.addEventListener('input', (e) => {
     appState.treeSearchQuery = e.target.value;
-    renderFolderTree();
+    scheduleTreeSearch();
   });
 
   elements.btnTreeExpandAll.addEventListener('click', () => {
@@ -600,7 +553,7 @@ function setupEventListeners() {
   elements.compareTableSearch.addEventListener('input', (e) => {
     appState.compareSearchQuery = e.target.value;
     appState.compareCurrentPage = 1;
-    applyCompareFiltersAndRenderTable();
+    scheduleCompareSearch();
   });
 
   // Filtro schede stato
@@ -754,79 +707,20 @@ function toggleInputMode(mode) {
   }
 }
 
-function processUploadedFileBuffer(fileName, arrayBuffer) {
-  const uint8 = new Uint8Array(arrayBuffer);
-  
-  // 1. Rileva header mozLz40\0 (8 byte)
-  const magic = [109, 111, 122, 76, 122, 52, 48, 0]; // "mozLz40\0"
-  let isMozLz4 = uint8.length >= 8;
-  if (isMozLz4) {
-    for (let i = 0; i < 8; i++) {
-      if (uint8[i] !== magic[i]) {
-        isMozLz4 = false;
-        break;
-      }
-    }
-  }
-
-  if (isMozLz4) {
-    try {
-      const decompressed = decompressMozLz4(uint8);
-      return {
-        text: decompressed,
-        status: "Backup Firefox compresso (.jsonlz4) decodificato"
-      };
-    } catch (err) {
-      console.error("LZ4 Decompression failed:", err);
-      throw new Error("Impossibile decomprimere il file .jsonlz4. Il file potrebbe essere corrotto.");
-    }
-  }
-
-  // 2. Altrimenti, decodifica come testo UTF-8
-  const text = new TextDecoder("utf-8").decode(uint8);
-  const trimmed = text.trim();
-
-  // Controlla se è JSON
-  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-    try {
-      const json = JSON.parse(trimmed);
-      if (json.roots) {
-        return {
-          text: text,
-          status: "Preferiti Chrome (JSON) rilevati"
-        };
-      } else if (json.children || json.guid || json.root === 'placesRoot') {
-        return {
-          text: text,
-          status: "Backup preferiti Firefox (JSON) rilevato"
-        };
-      } else {
-        return {
-          text: text,
-          status: "File JSON rilevato"
-        };
-      }
-    } catch (e) {
-      // Non è un JSON valido, tratta come testo/HTML
-    }
-  }
-
-  return {
-    text: text,
-    status: "File preferiti HTML caricato"
-  };
-}
-
 function handleSelectedFile(file) {
+  const revision = ++fileReadRevisions.convert;
+  appState.originalHtml = '';
   elements.selectedFileInfo.textContent = `Selezionato: ${file.name} (${formatBytes(file.size)})`;
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
-      const result = processUploadedFileBuffer(file.name, e.target.result);
+      const result = await runProcessingTask('decode', e.target.result);
+      if (revision !== fileReadRevisions.convert) return;
       appState.originalHtml = result.text;
       elements.selectedFileInfo.textContent = `Selezionato: ${file.name} (${formatBytes(file.size)}) - ${result.status}`;
       showToast(`${result.status} con successo!`);
     } catch (err) {
+      if (revision !== fileReadRevisions.convert) return;
       showToast('Errore di caricamento: ' + err.message);
       elements.selectedFileInfo.textContent = `Errore: ${err.message}`;
     }
@@ -864,7 +758,7 @@ function hideLoader() {
 }
 
 // --- ELABORAZIONE DATI ---
-function processBookmarksData(shouldScroll = true) {
+async function processBookmarksData(shouldScroll = true) {
   let htmlContent = '';
   if (elements.btnModeText.classList.contains('active')) {
     htmlContent = elements.textPaste.value.trim();
@@ -872,73 +766,74 @@ function processBookmarksData(shouldScroll = true) {
   } else {
     htmlContent = appState.originalHtml;
   }
-  
+
   if (!htmlContent) {
     showToast('Nessun contenuto da elaborare! Carica un file o incolla il codice.');
     return;
   }
-  
+
   showLoader('Analisi dei preferiti HTML in corso...');
-  setTimeout(() => {
-    try {
-      // 1. Parsing ad albero
-      console.log('[v2.1.0] HTML len:', htmlContent ? htmlContent.length : 0);
-      const rawTree = parseBookmarks(htmlContent);
-      console.log('[v2.1.0] RawTree nodi:', rawTree ? rawTree.length : 0);
-      if (!rawTree || rawTree.length === 0) {
-        throw new Error('Nessun preferito estratto. Assicurati che sia un file di preferiti HTML valido.');
-      }
-      
-      // 2. Applicazione formattazione date desiderata sul file originale
-      appState.parsedTree = formatTreeDates(rawTree, appState.dateFormat);
-      
-      // Inizializza gli stati di espansione e calcola i conteggi dei preferiti per cartella
-      initTreeNodesState(appState.parsedTree);
-      computeFolderCounts(appState.parsedTree);
-      
-      appState.flatBookmarks = flattenBookmarks(appState.parsedTree);
-      
-      // Inizializza La Macchina del Tempo (Timeline Nostalgia)
-      initTimeline();
-      
-      // 3. Calcolo e aggiornamento statistiche
-      updateStats();
-      
-      // 4. Rendering albero sidebar
-      renderFolderTree();
-      
-      // 5. Filtri e rendering tabella
-      appState.currentPage = 1;
-      appState.activeFolderFilter = null; // Resetta filtro cartella
-      applyFiltersAndRenderTable();
-      renderVisuals();
-      
-      // Generazione file esportazione
-      updateExportOutput();
-      
-      // Reset dei dati della scheda Esplora
-      appState.wrappedStats = null;
-      appState.tarotHand = [];
-      if (appState.currentMode === 'explore') {
-        updateExploreTabUI();
-      }
-      
-      // Mostra pannello risultati solo in modalità convert
-      if (appState.currentMode === 'convert') {
-        elements.resultsContainer.classList.remove('hidden');
-      }
-      hideLoader();
-      showToast('Preferiti convertiti con successo!');
-      
-      if (shouldScroll && appState.currentMode === 'convert') {
-        elements.resultsContainer.scrollIntoView({ behavior: 'smooth' });
-      }
-    } catch (error) {
-      hideLoader();
-      showToast('Errore di elaborazione: ' + error.message);
-      console.error(error);
+  const revision = ++processingRevision;
+  try {
+    // 1. Parsing ad albero
+    console.log('[v2.1.0] HTML len:', htmlContent ? htmlContent.length : 0);
+    const rawTree = await runProcessingTask('parse', htmlContent);
+    if (revision !== processingRevision) return;
+    console.log('[v2.1.0] RawTree nodi:', rawTree ? rawTree.length : 0);
+    if (!rawTree || rawTree.length === 0) {
+      throw new Error('Nessun preferito estratto. Assicurati che sia un file di preferiti HTML valido.');
     }
-  }, 100);
+
+    // 2. Applicazione formattazione date desiderata sul file originale
+    appState.parsedTree = formatTreeDates(rawTree, appState.dateFormat);
+
+    // Inizializza gli stati di espansione e calcola i conteggi dei preferiti per cartella
+    initTreeNodesState(appState.parsedTree);
+    computeFolderCounts(appState.parsedTree);
+
+    appState.flatBookmarks = flattenBookmarks(appState.parsedTree);
+
+    // Inizializza La Macchina del Tempo (Timeline Nostalgia)
+    initTimeline();
+
+    // 3. Calcolo e aggiornamento statistiche
+    updateStats();
+
+    // 4. Rendering albero sidebar
+    renderFolderTree();
+
+    // 5. Filtri e rendering tabella
+    appState.currentPage = 1;
+    appState.activeFolderFilter = null; // Resetta filtro cartella
+    applyFiltersAndRenderTable();
+    renderVisuals();
+
+    // Generazione file esportazione
+    updateExportOutput();
+
+    // Reset dei dati della scheda Esplora
+    appState.wrappedStats = null;
+    appState.tarotHand = [];
+    if (appState.currentMode === 'explore') {
+      updateExploreTabUI();
+    }
+
+    // Mostra pannello risultati solo in modalità convert
+    if (appState.currentMode === 'convert') {
+      elements.resultsContainer.classList.remove('hidden');
+    }
+    hideLoader();
+    showToast('Preferiti convertiti con successo!');
+
+    if (shouldScroll && appState.currentMode === 'convert') {
+      elements.resultsContainer.scrollIntoView({ behavior: 'smooth' });
+    }
+  } catch (error) {
+    if (revision !== processingRevision) return;
+    hideLoader();
+    showToast('Errore di elaborazione: ' + error.message);
+    console.error(error);
+  }
 }
 
 // --- STATISTICHE ED ESTRAZIONI ---
@@ -1328,76 +1223,14 @@ function buildTreeHTML(nodes, parentEl, currentPath = []) {
 }
 
 // --- FILTRO E GESTIONE TABELLA (MATRICE) ---
+const bookmarkQuery = createBookmarkQuery();
 function applyFiltersAndRenderTable() {
-  let result = [...appState.flatBookmarks];
-  
-  // 1. Filtro cartella attiva
-  if (appState.activeFolderFilter) {
-    const filterPathLen = appState.activeFolderFilter.length;
-    result = result.filter(b => {
-      // Controlla se il percorso della cartella del bookmark inizia con il filtro selezionato
-      if (b.folderPath.length < filterPathLen) return false;
-      for (let i = 0; i < filterPathLen; i++) {
-        if (b.folderPath[i] !== appState.activeFolderFilter[i]) return false;
-      }
-      return true;
-    });
-  }
-  
-  // 2. Filtro ricerca testuale
-  if (appState.searchQuery) {
-    const q = appState.searchQuery.toLowerCase();
-    result = result.filter(b => 
-      b.title.toLowerCase().includes(q) || 
-      b.url.toLowerCase().includes(q) || 
-      b.folderPath.join(' / ').toLowerCase().includes(q)
-    );
-  }
-
-  // 3. Filtro temporale (La Macchina del Tempo)
-  if (appState.timelineActive && appState.timelineSelectedIndex >= 0) {
-    const activePeriod = appState.timelineRange[appState.timelineSelectedIndex];
-    if (activePeriod) {
-      result = result.filter(b => {
-        if (!b.rawAddDate) return false;
-        const d = new Date(b.rawAddDate);
-        if (isNaN(d.getTime())) return false;
-        return d.getFullYear() === activePeriod.year && (d.getMonth() + 1) === activePeriod.month;
-      });
-    }
-  }
-  
-  // 3. Ordinamento
-  const col = appState.sortColumn;
-  const dir = appState.sortDirection === 'asc' ? 1 : -1;
-  
-  result.sort((a, b) => {
-    let valA = '';
-    let valB = '';
-    
-    if (col === 'title') {
-      valA = a.title.toLowerCase();
-      valB = b.title.toLowerCase();
-    } else if (col === 'url') {
-      valA = a.url.toLowerCase();
-      valB = b.url.toLowerCase();
-    } else if (col === 'folder') {
-      valA = a.folderPath.join(' / ').toLowerCase();
-      valB = b.folderPath.join(' / ').toLowerCase();
-    } else if (col === 'date') {
-      valA = a.addDate || '';
-      valB = b.addDate || '';
-    } else {
-      // Default: indice originario implicitamente mantenuto nell'array flat
-      return 0; 
-    }
-    
-    if (valA < valB) return -1 * dir;
-    if (valA > valB) return 1 * dir;
-    return 0;
+  const period = appState.timelineActive && appState.timelineSelectedIndex >= 0
+    ? appState.timelineRange[appState.timelineSelectedIndex] : null;
+  appState.filteredBookmarks = bookmarkQuery.select(appState.flatBookmarks, {
+    query: appState.searchQuery, folderPath: appState.activeFolderFilter, period,
+    column: appState.sortColumn, direction: appState.sortDirection
   });
-  
-  appState.filteredBookmarks = result;
   renderTable();
 }
 
@@ -1743,84 +1576,6 @@ function cleanDataForExport(data, excludeIcons, cleanUrls) {
   return data;
 }
 
-function generateCSV(flatData) {
-  const headers = ['Indice', 'Cartella', 'Titolo', 'URL Link', 'Data Aggiunta'];
-  const rows = flatData.map((b, i) => {
-    return [
-      (i + 1).toString(),
-      b.folderPath.join(' / '),
-      b.title,
-      b.url,
-      b.addDate || ''
-    ];
-  });
-  
-  const escapeCSV = (val) => {
-    const str = val.replace(/"/g, '""');
-    return `"${str}"`;
-  };
-  
-  const csvContent = [
-    headers.map(escapeCSV).join(','),
-    ...rows.map(row => row.map(escapeCSV).join(','))
-  ].join('\n');
-  
-  return csvContent;
-}
-
-function generateMarkdown(treeData) {
-  let md = '# I Miei Preferiti\n\n';
-  
-  function buildMDList(nodes, level = 1) {
-    nodes.forEach(node => {
-      if (node.type === 'folder') {
-        const hash = '#'.repeat(Math.min(level + 1, 6));
-        md += `${hash} ${node.title}\n\n`;
-        buildMDList(node.children, level + 1);
-      } else if (node.type === 'bookmark') {
-        md += `* [${node.title || node.url}](${node.url})\n`;
-      }
-    });
-    // Aggiunge riga vuota alla fine di ogni livello cartella
-    md += '\n';
-  }
-  
-  buildMDList(treeData, 1);
-  return md.trim();
-}
-
-function generateSQL(flatData) {
-  let sql = `-- Tabella creata per preferiti Bookmarks Tools\n`;
-  sql += `CREATE TABLE IF NOT EXISTS preferiti (\n`;
-  sql += `  id INT AUTO_INCREMENT PRIMARY KEY,\n`;
-  sql += `  percorso_cartella TEXT,\n`;
-  sql += `  titolo VARCHAR(512),\n`;
-  sql += `  url TEXT,\n`;
-  sql += `  data_aggiunta VARCHAR(50)\n`;
-  sql += `);\n\n`;
-  
-  if (flatData.length === 0) return sql;
-  
-  // Dividiamo in blocchi di 500 inserimenti per evitare query gigantesche
-  const chunkSize = 500;
-  for (let i = 0; i < flatData.length; i += chunkSize) {
-    const chunk = flatData.slice(i, i + chunkSize);
-    sql += `INSERT INTO preferiti (percorso_cartella, titolo, url, data_aggiunta) VALUES\n`;
-    
-    const valueLines = chunk.map(b => {
-      const folder = b.folderPath.join(' / ').replace(/'/g, "''");
-      const title = b.title.replace(/'/g, "''");
-      const url = b.url.replace(/'/g, "''");
-      const date = (b.addDate || '').replace(/'/g, "''");
-      return `  ('${folder}', '${title}', '${url}', '${date}')`;
-    });
-    
-    sql += valueLines.join(',\n') + ';\n\n';
-  }
-  
-  return sql.trim();
-}
-
 function copyCodeToClipboard() {
   const codeText = elements.codeOutputText.value;
   if (!codeText) {
@@ -1871,35 +1626,6 @@ function downloadCodeFile() {
 }
 
 // --- UTILITÀ MINORI ---
-function formatTreeDates(nodes, formatType) {
-  return nodes.map(node => {
-    const formattedNode = { ...node };
-    if (formattedNode.type === 'bookmark') {
-      if (!formattedNode.rawAddDate) {
-        formattedNode.rawAddDate = node.rawAddDate || node.addDate;
-      }
-      formattedNode.addDate = formatSingleDate(formattedNode.rawAddDate, formatType);
-    } else if (formattedNode.type === 'folder' && formattedNode.children) {
-      formattedNode.children = formatTreeDates(formattedNode.children, formatType);
-    }
-    return formattedNode;
-  });
-}
-
-function formatSingleDate(isoDateStr, formatType) {
-  if (!isoDateStr) return '';
-  const date = new Date(isoDateStr);
-  if (isNaN(date.getTime())) return isoDateStr;
-  
-  if (formatType === 'unix') {
-    return Math.floor(date.getTime() / 1000).toString();
-  } else if (formatType === 'locale') {
-    return date.toLocaleString('it-IT');
-  }
-  // Default: ISO String
-  return date.toISOString();
-}
-
 function formatBytes(bytes, decimals = 2) {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;
@@ -1979,6 +1705,7 @@ function showToast(message) {
 // ==========================================
 
 function switchAppMode(mode) {
+  if (mode !== 'convert') { stopVisualGraph(); stopTimelinePlay(); }
   appState.currentMode = mode;
   const copy = {
     convert: ['01 / IMPORTA I PREFERITI', 'Da un file a una raccolta organizzata', 'Carica l’esportazione del tuo browser, poi scegli il formato da scaricare.'],
@@ -2020,6 +1747,7 @@ function switchAppMode(mode) {
     }
     updateExploreTabUI();
   }
+  if (mode === 'convert' && appState.currentView === 'graph') renderVisuals();
   syncControlStates();
 }
 
@@ -2043,13 +1771,16 @@ function toggleCompareInputMode(fileKey, inputMode) {
 }
 
 function handleSelectedCompareFile(fileKey, file) {
+  const revision = ++fileReadRevisions[fileKey];
+  (fileKey === 'A' ? appState.fileA : appState.fileB).rawHtml = '';
   const infoEl = fileKey === 'A' ? elements.selectedFileInfoA : elements.selectedFileInfoB;
   infoEl.textContent = `Selezionato: ${file.name} (${formatBytes(file.size)})`;
   
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
-      const result = processUploadedFileBuffer(file.name, e.target.result);
+      const result = await runProcessingTask('decode', e.target.result);
+      if (revision !== fileReadRevisions[fileKey]) return;
       if (fileKey === 'A') {
         appState.fileA.rawHtml = result.text;
         appState.fileA.name = file.name;
@@ -2062,6 +1793,7 @@ function handleSelectedCompareFile(fileKey, file) {
       infoEl.textContent = `Selezionato: ${file.name} (${formatBytes(file.size)}) - ${result.status}`;
       showToast(`File ${fileKey} caricato come ${result.status}!`);
     } catch (err) {
+      if (revision !== fileReadRevisions[fileKey]) return;
       showToast(`Errore caricamento File ${fileKey}: ` + err.message);
       infoEl.textContent = `Errore: ${err.message}`;
     }
@@ -2102,7 +1834,7 @@ async function loadCompareExampleFiles() {
   }
 }
 
-function processCompareData(shouldScroll = true) {
+async function processCompareData(shouldScroll = true) {
   // Legge dai textareas se in modalità testo
   if (elements.btnCompareModeTextA.classList.contains('active')) {
     appState.fileA.rawHtml = elements.textPasteA.value.trim();
@@ -2120,64 +1852,72 @@ function processCompareData(shouldScroll = true) {
 
   showLoader('Confronto dei preferiti in corso...');
 
-  setTimeout(() => {
-    try {
-      // 1. Parsing di entrambi i file
-      const treeA = parseBookmarks(appState.fileA.rawHtml);
-      const treeB = parseBookmarks(appState.fileB.rawHtml);
+  const revision = ++processingRevision;
+  try {
+    // 1. Parsing di entrambi i file
+    const [treeA, treeB] = await Promise.all([
+      runProcessingTask('parse', appState.fileA.rawHtml),
+      runProcessingTask('parse', appState.fileB.rawHtml)
+    ]);
+    if (revision !== processingRevision) return;
 
-      if (!treeA || treeA.length === 0) {
-        throw new Error('Nessun preferito estratto dal File A. Assicurati che sia valido.');
-      }
-      if (!treeB || treeB.length === 0) {
-        throw new Error('Nessun preferito estratto dal File B. Assicurati che sia valido.');
-      }
-
-      // Applica formattazione data
-      const formattedTreeA = formatTreeDates(treeA, appState.compareDateFormat);
-      const formattedTreeB = formatTreeDates(treeB, appState.compareDateFormat);
-
-      appState.fileA.flatBookmarks = flattenBookmarks(formattedTreeA);
-      appState.fileB.flatBookmarks = flattenBookmarks(formattedTreeB);
-
-      // 2. Esegue il confronto
-      const results = compareBookmarks(appState.fileA.flatBookmarks, appState.fileB.flatBookmarks);
-      appState.comparisonResults = results;
-
-      // 3. Statistiche del confronto
-      animateCount(elements.statCompareAdded, results.added.length);
-      animateCount(elements.statCompareRemoved, results.removed.length);
-      animateCount(elements.statCompareModified, results.modified.length);
-      animateCount(elements.statCompareIdentical, results.identical.length);
-
-      // Aggiorna i conteggi visualizzati nei tab
-      elements.cntAll.textContent = results.added.length + results.removed.length + results.modified.length + results.identical.length;
-      elements.cntAdded.textContent = results.added.length;
-      elements.cntRemoved.textContent = results.removed.length;
-      elements.cntModified.textContent = results.modified.length;
-      elements.cntIdentical.textContent = results.identical.length;
-
-      // 4. Tabella
-      appState.compareCurrentPage = 1;
-      applyCompareFiltersAndRenderTable();
-
-      // 5. Generazione report esportazione
-      updateCompareExportOutput();
-
-      // Mostra container risultati
-      elements.compareResultsContainer.classList.remove('hidden');
-      hideLoader();
-      showToast('Confronto completato con successo!');
-
-      if (shouldScroll) {
-        elements.compareResultsContainer.scrollIntoView({ behavior: 'smooth' });
-      }
-    } catch (error) {
-      hideLoader();
-      showToast('Errore nel confronto: ' + error.message);
-      console.error(error);
+    if (!treeA || treeA.length === 0) {
+      throw new Error('Nessun preferito estratto dal File A. Assicurati che sia valido.');
     }
-  }, 100);
+    if (!treeB || treeB.length === 0) {
+      throw new Error('Nessun preferito estratto dal File B. Assicurati che sia valido.');
+    }
+
+    // Applica formattazione data
+    const formattedTreeA = formatTreeDates(treeA, appState.compareDateFormat);
+    const formattedTreeB = formatTreeDates(treeB, appState.compareDateFormat);
+
+    const flatA = flattenBookmarks(formattedTreeA);
+    const flatB = flattenBookmarks(formattedTreeB);
+
+    // 2. Esegue il confronto
+    const results = await runProcessingTask('compare', {
+      a: flatA, b: flatB
+    });
+    if (revision !== processingRevision) return;
+    appState.fileA.flatBookmarks = flatA;
+    appState.fileB.flatBookmarks = flatB;
+    appState.comparisonResults = results;
+
+    // 3. Statistiche del confronto
+    animateCount(elements.statCompareAdded, results.added.length);
+    animateCount(elements.statCompareRemoved, results.removed.length);
+    animateCount(elements.statCompareModified, results.modified.length);
+    animateCount(elements.statCompareIdentical, results.identical.length);
+
+    // Aggiorna i conteggi visualizzati nei tab
+    elements.cntAll.textContent = results.added.length + results.removed.length + results.modified.length + results.identical.length;
+    elements.cntAdded.textContent = results.added.length;
+    elements.cntRemoved.textContent = results.removed.length;
+    elements.cntModified.textContent = results.modified.length;
+    elements.cntIdentical.textContent = results.identical.length;
+
+    // 4. Tabella
+    appState.compareCurrentPage = 1;
+    applyCompareFiltersAndRenderTable();
+
+    // 5. Generazione report esportazione
+    updateCompareExportOutput();
+
+    // Mostra container risultati
+    if (appState.currentMode === 'compare') elements.compareResultsContainer.classList.remove('hidden');
+    hideLoader();
+    showToast('Confronto completato con successo!');
+
+    if (shouldScroll && appState.currentMode === 'compare') {
+      elements.compareResultsContainer.scrollIntoView({ behavior: 'smooth' });
+    }
+  } catch (error) {
+    if (revision !== processingRevision) return;
+    hideLoader();
+    showToast('Errore nel confronto: ' + error.message);
+    console.error(error);
+  }
 }
 
 function applyCompareFiltersAndRenderTable() {
@@ -2203,21 +1943,7 @@ function applyCompareFiltersAndRenderTable() {
   // 2. Filtro ricerca testuale
   if (appState.compareSearchQuery) {
     const q = appState.compareSearchQuery.toLowerCase();
-    rawList = rawList.filter(item => {
-      const urlMatch = item.url && item.url.toLowerCase().includes(q);
-      
-      if (item.status === 'modified') {
-        const titleMatch = (item.oldTitle && item.oldTitle.toLowerCase().includes(q)) || 
-                           (item.newTitle && item.newTitle.toLowerCase().includes(q));
-        const folderMatch = (item.oldFolderPath && item.oldFolderPath.join(' / ').toLowerCase().includes(q)) ||
-                            (item.newFolderPath && item.newFolderPath.join(' / ').toLowerCase().includes(q));
-        return urlMatch || titleMatch || folderMatch;
-      } else {
-        const titleMatch = item.title && item.title.toLowerCase().includes(q);
-        const folderMatch = item.folderPath && item.folderPath.join(' / ').toLowerCase().includes(q);
-        return urlMatch || titleMatch || folderMatch;
-      }
-    });
+    rawList = rawList.filter(item => bookmarkQuery.matchesComparison(item, q));
   }
 
   appState.filteredCompareList = rawList;
@@ -2509,6 +2235,7 @@ function downloadCompareReportFile() {
 function switchContentView(view) {
   appState.currentView = view;
   if (view === 'table') {
+    stopVisualGraph();
     elements.tabBtnTable.classList.add('active');
     elements.tabBtnGraph.classList.remove('active');
     elements.secTableView.classList.remove('hidden');
@@ -2535,7 +2262,7 @@ function switchGraphType(type) {
 }
 
 function renderVisuals() {
-  if (appState.currentView !== 'graph' || !appState.parsedTree || appState.parsedTree.length === 0) return;
+  if (appState.currentMode !== 'convert' || appState.currentView !== 'graph' || !appState.parsedTree || appState.parsedTree.length === 0) return;
   
   let graphData = appState.parsedTree;
   let rootTitle = "Tutti i Preferiti";

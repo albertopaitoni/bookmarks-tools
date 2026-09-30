@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareBookmarks } from '../comparator.js';
-import { decompressMozLz4, parseBookmarks } from '../parser.js';
-import { safeBookmarkUrl, openBookmarkUrl } from '../urls.js';
+import { compareBookmarks } from '../src/comparator.js';
+import { decompressMozLz4, parseBookmarks } from '../src/parser.js';
+import { safeBookmarkUrl, openBookmarkUrl } from '../src/urls.js';
 
 const bookmark = (title, folderPath = [], url = 'https://example.com') =>
   ({ type: 'bookmark', title, folderPath, url, addDate: '', icon: '' });

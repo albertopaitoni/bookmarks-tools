@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "description": "Convertitore Premium di Preferiti HTML in JSON, CSV, MD e SQL",
   "type": "module",
-  "main": "app.js",
+  "main": "src/app.js",
   "scripts": {
-    "test": "node --test",
-    "dev": "npx sirv-cli . --port 3000 --cors --single --dev"
+    "test": "node --test tests/*.test.js",
+    "test:browser": "node scripts/browser-smoke.js",
+    "benchmark": "node scripts/benchmark.js",
+    "dev": "node scripts/dev-server.js"
   },
   "keywords": [
     "bookmarks",
@@ -14,5 +16,11 @@
     "parser"
   ],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
 }

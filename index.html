@@ -5,15 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Bookmarks Tools: Converti e analizza i tuoi preferiti HTML esportati da qualsiasi browser (Chrome, Safari, Firefox, DuckDuckGo) in formati strutturati come JSON, CSV, Markdown e query SQL.">
   <title>Bookmarks Tools - Convertitore Premium di Preferiti HTML</title>
-  <!-- Google Fonts: Outfit per intestazioni, Inter per testo normale -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=1.1.0">
+  <!-- Font e librerie locali, disponibili anche senza CDN -->
+  <link rel="stylesheet" href="vendor/fonts.css">
+  <link rel="stylesheet" href="src/styles/style.css?v=1.1.0">
   <!-- D3.js per Grafici e Mappe Mentali -->
-  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script defer src="vendor/d3-7.9.0.min.js"></script>
   <!-- QRious per generazione QR Code lato client -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+  <script defer src="vendor/qrious-4.0.2.min.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Vai agli strumenti</a>
@@ -902,6 +900,6 @@
   </div>
 
   <!-- Caricamento Script in modalità Modulo -->
-  <script type="module" src="app.js?v=2.1.0"></script>
+  <script type="module" src="src/app.js?v=2.1.0"></script>
 </body>
 </html>

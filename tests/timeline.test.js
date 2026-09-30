@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 
 test('la selezione degli ultimi mesi aggiorna il filtro senza scorrere la pagina', () => {
-  const source = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
   const start = source.indexOf('function selectTimelineIndex(');
   const end = source.indexOf('function handleTimelineSliderInput(', start);
   const bars = Array.from({ length: 120 }, () => {
