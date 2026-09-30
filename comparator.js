@@ -11,9 +11,8 @@
  * @returns {Object} Oggetto con le categorie: added, removed, modified, identical.
  */
 export function compareBookmarks(flatA, flatB) {
-  // Clona gli array originari per non alterarli in-place
-  const listA = flatA.map((item, idx) => ({ ...item, originalIndex: idx }));
-  const listB = flatB.map((item, idx) => ({ ...item, originalIndex: idx }));
+  const listA = flatA;
+  const listB = flatB;
 
   const added = [];
   const removed = [];
@@ -24,17 +23,36 @@ export function compareBookmarks(flatA, flatB) {
   const matchedA = new Set();
   const matchedB = new Set();
 
+  // Code di indici: ogni occorrenza viene consumata una sola volta per stadio.
+  // Serializzare il percorso evita collisioni tra ['A / B'] e ['A', 'B'].
+  const exactKey = b => JSON.stringify([b.url, b.folderPath, b.title]);
+  const folderKey = b => JSON.stringify([b.url, b.folderPath]);
+  function buildIndex(keyFor) {
+    const index = new Map();
+    listA.forEach((bookmark, i) => {
+      const key = keyFor(bookmark);
+      if (!index.has(key)) index.set(key, { indices: [], cursor: 0 });
+      index.get(key).indices.push(i);
+    });
+    return index;
+  }
+  const exactIndex = buildIndex(exactKey);
+  const folderIndex = buildIndex(folderKey);
+  const urlIndex = buildIndex(b => b.url);
+  function takeMatch(index, key) {
+    const queue = index.get(key);
+    if (!queue) return -1;
+    while (queue.cursor < queue.indices.length) {
+      const i = queue.indices[queue.cursor++];
+      if (!matchedA.has(i)) return i;
+    }
+    return -1;
+  }
+
   // STADIO 1: Ricerca di match IDENTICI esatti (stesso URL, stesso folderPath, stesso titolo)
   for (let i = 0; i < listB.length; i++) {
     const b = listB[i];
-    const pathB = b.folderPath.join(' / ');
-    
-    // Cerchiamo un elemento in A identico
-    const matchIdx = listA.findIndex((a, idx) => {
-      if (matchedA.has(idx)) return false;
-      const pathA = a.folderPath.join(' / ');
-      return a.url === b.url && pathA === pathB && a.title === b.title;
-    });
+    const matchIdx = takeMatch(exactIndex, exactKey(b));
 
     if (matchIdx !== -1) {
       identical.push({
@@ -54,13 +72,7 @@ export function compareBookmarks(flatA, flatB) {
   for (let i = 0; i < listB.length; i++) {
     if (matchedB.has(i)) continue;
     const b = listB[i];
-    const pathB = b.folderPath.join(' / ');
-
-    const matchIdx = listA.findIndex((a, idx) => {
-      if (matchedA.has(idx)) return false;
-      const pathA = a.folderPath.join(' / ');
-      return a.url === b.url && pathA === pathB;
-    });
+    const matchIdx = takeMatch(folderIndex, folderKey(b));
 
     if (matchIdx !== -1) {
       const a = listA[matchIdx];
@@ -86,15 +98,12 @@ export function compareBookmarks(flatA, flatB) {
     if (matchedB.has(i)) continue;
     const b = listB[i];
 
-    const matchIdx = listA.findIndex((a, idx) => {
-      if (matchedA.has(idx)) return false;
-      return a.url === b.url;
-    });
+    const matchIdx = takeMatch(urlIndex, b.url);
 
     if (matchIdx !== -1) {
       const a = listA[matchIdx];
       const titleChanged = a.title !== b.title;
-      const folderChanged = a.folderPath.join(' / ') !== b.folderPath.join(' / ');
+      const folderChanged = JSON.stringify(a.folderPath) !== JSON.stringify(b.folderPath);
 
       modified.push({
         status: 'modified',

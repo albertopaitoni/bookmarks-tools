@@ -1,4 +1,5 @@
 // app.js - Controller UI & workflow Bookmarks Tools
+import { safeBookmarkUrl, openBookmarkUrl } from './urls.js';
 
 import { parseBookmarks, flattenBookmarks, decompressMozLz4 } from './parser.js?v=2.1.0';
 import { compareBookmarks, generateCompareCSV, generateCompareMarkdown } from './comparator.js?v=2.1.0';
@@ -116,7 +117,7 @@ const elements = {
   tableHeaders: document.querySelectorAll('#bookmarks-table th'),
   
   // Esportazione
-  exportTabs: document.querySelectorAll('.btn-tab'),
+  exportTabs: document.querySelectorAll('#results-container .export-tabs-nav [data-format]'),
   exportFilename: document.getElementById('export-filename'),
   codeOutputText: document.getElementById('code-output-text'),
   btnCopyCode: document.getElementById('btn-copy-code'),
@@ -262,7 +263,40 @@ const elements = {
 // --- INIZIALIZZAZIONE ---
 document.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
+  setupInterfaceAccessibility();
 });
+
+// Keep selection feedback available to keyboard and assistive technology users.
+function syncControlStates() {
+  document.querySelectorAll('.btn-tab-mode, .btn-toggle, .btn-tab').forEach(button => {
+    button.setAttribute('aria-pressed', String(button.classList.contains('active')));
+  });
+  elements.tableHeaders.forEach(header => {
+    if (header.dataset.sort) header.setAttribute('aria-sort',
+      header.dataset.sort === appState.sortColumn
+        ? (appState.sortDirection === 'asc' ? 'ascending' : 'descending') : 'none');
+  });
+}
+
+function setupInterfaceAccessibility() {
+  document.querySelectorAll('[data-file-picker]').forEach(button => {
+    button.addEventListener('click', () => document.getElementById(button.dataset.filePicker).click());
+  });
+  document.querySelectorAll('svg').forEach(icon => {
+    if (!icon.hasAttribute('aria-label') && !icon.hasAttribute('role')) icon.setAttribute('aria-hidden', 'true');
+  });
+  elements.tableHeaders.forEach(header => {
+    if (!header.dataset.sort) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'sort-button';
+    button.title = `Tocca per ordinare per ${header.textContent.trim().toLowerCase()}`;
+    while (header.firstChild) button.appendChild(header.firstChild);
+    header.appendChild(button);
+  });
+  document.addEventListener('click', () => queueMicrotask(syncControlStates));
+  syncControlStates();
+}
 
 // --- GESTIONE EVENTI ---
 function setupEventListeners() {
@@ -279,6 +313,13 @@ function setupEventListeners() {
   }
   
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'Tab' && elements.qrModal?.classList.contains('active')) {
+      const controls = [...elements.qrModal.querySelectorAll('button:not(:disabled), a[href]')];
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
     if (e.key === 'Escape' && elements.qrModal && elements.qrModal.classList.contains('active')) {
       closeQRModal();
     }
@@ -1250,7 +1291,7 @@ function buildTreeHTML(nodes, parentEl, currentPath = []) {
       }
       
       const linkEl = document.createElement('a');
-      linkEl.href = node.url;
+      linkEl.href = safeBookmarkUrl(node.url) || '#';
       linkEl.target = '_blank';
       linkEl.rel = 'noopener noreferrer';
       linkEl.className = 'tree-bookmark-node';
@@ -1260,7 +1301,7 @@ function buildTreeHTML(nodes, parentEl, currentPath = []) {
       
       let faviconHtml = '';
       if (node.icon) {
-        faviconHtml = `<img class="bookmark-favicon" src="${node.icon}" alt="" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 fill=%22none%22 viewBox=%220 0 24 24%22 stroke=%22currentColor%22 stroke-width=%222%22><path d=%22M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71%22/></svg>'">`;
+        faviconHtml = `<img class="bookmark-favicon" src="${escapeHTML(node.icon)}" alt="" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 fill=%22none%22 viewBox=%220 0 24 24%22 stroke=%22currentColor%22 stroke-width=%222%22><path d=%22M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71%22/></svg>'">`;
       } else {
         faviconHtml = `<svg class="bookmark-favicon text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="padding: 2px;">
           <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
@@ -1392,13 +1433,13 @@ function renderTable() {
   pageData.forEach((bookmark, i) => {
     const globalIdx = startIdx + i + 1;
     const folderSpan = bookmark.folderPath.length > 0 
-      ? `<span class="folder-tag" title="${bookmark.folderPath.join(' / ')}">${bookmark.folderPath[bookmark.folderPath.length - 1]}</span>`
+      ? `<span class="folder-tag" title="${escapeHTML(bookmark.folderPath.join(' / '))}">${escapeHTML(bookmark.folderPath[bookmark.folderPath.length - 1])}</span>`
       : `<span class="text-muted">—</span>`;
       
     // Costruzione Favicon
     let faviconHtml = '';
     if (bookmark.icon) {
-      faviconHtml = `<img class="bookmark-favicon" src="${bookmark.icon}" alt="" onerror="this.style.display='none'">`;
+      faviconHtml = `<img class="bookmark-favicon" src="${escapeHTML(bookmark.icon)}" alt="" onerror="this.style.display='none'">`;
     } else {
       faviconHtml = `<svg class="bookmark-favicon text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="padding: 2px;">
         <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
@@ -1421,7 +1462,7 @@ function renderTable() {
     tr.innerHTML = `
       <td class="col-idx" style="text-align: center; color: var(--text-muted);">${globalIdx}</td>
       <td class="col-folder">${folderSpan}</td>
-      <td class="col-title" title="${bookmark.title}">
+      <td class="col-title" title="${escapeHTML(bookmark.title)}">
         <div class="table-title-container">
           ${faviconHtml}
           <span class="bookmark-title-text">${escapeHTML(bookmark.title)}</span>
@@ -1435,10 +1476,10 @@ function renderTable() {
           </button>
         </div>
       </td>
-      <td class="col-url" title="${bookmark.url}">
-        <a href="${bookmark.url}" target="_blank" rel="noopener noreferrer">${escapeHTML(bookmark.url)}</a>
+      <td class="col-url" title="${escapeHTML(bookmark.url)}">
+        <a href="${escapeHTML(safeBookmarkUrl(bookmark.url) || '#')}" target="_blank" rel="noopener noreferrer">${escapeHTML(bookmark.url)}</a>
       </td>
-      <td class="col-date" style="color: var(--text-secondary); font-size: 0.8rem;">${displayDate}</td>
+      <td class="col-date" style="color: var(--text-secondary); font-size: 0.8rem;">${escapeHTML(displayDate)}</td>
     `;
     elements.tableBody.appendChild(tr);
   });
@@ -1879,13 +1920,13 @@ function escapeHTML(str) {
 }
 
 function animateCount(element, targetValue) {
-  const duration = 800; // ms
+  const duration = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 800; // ms
   const startTime = performance.now();
   const startValue = parseInt(element.textContent) || 0;
   
   function update(currentTime) {
     const elapsed = currentTime - startTime;
-    const progress = Math.min(elapsed / duration, 1);
+    const progress = duration === 0 ? 1 : Math.min(elapsed / duration, 1);
     
     // Easing out quadratic
     const easeProgress = progress * (2 - progress);
@@ -1910,7 +1951,19 @@ function showToast(message) {
   
   const toast = document.createElement('div');
   toast.className = 'toast-msg';
-  toast.textContent = message;
+  const isError = /errore|nessun|carica entrambi/i.test(message);
+  toast.classList.toggle('toast-error', isError);
+  toast.setAttribute('role', isError ? 'alert' : 'status');
+  const text = document.createElement('span');
+  text.textContent = message;
+  toast.appendChild(text);
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'toast-close';
+  close.setAttribute('aria-label', 'Chiudi notifica');
+  close.textContent = '×';
+  close.addEventListener('click', () => toast.remove());
+  toast.appendChild(close);
   document.body.appendChild(toast);
   
   // Rimuove dopo 3 secondi
@@ -1918,7 +1971,7 @@ function showToast(message) {
     toast.style.opacity = '0';
     toast.style.transition = 'opacity 0.5s ease';
     setTimeout(() => toast.remove(), 500);
-  }, 2500);
+  }, isError ? 10000 : 6000);
 }
 
 // ==========================================
@@ -1927,6 +1980,14 @@ function showToast(message) {
 
 function switchAppMode(mode) {
   appState.currentMode = mode;
+  const copy = {
+    convert: ['01 / IMPORTA I PREFERITI', 'Da un file a una raccolta organizzata', 'Carica l’esportazione del tuo browser, poi scegli il formato da scaricare.'],
+    compare: ['01 / SCEGLI DUE VERSIONI', 'Scopri cosa è cambiato', 'Carica la versione precedente nel file A e quella aggiornata nel file B.'],
+    explore: ['RISCOPRI LA TUA RACCOLTA', 'Dai una seconda vita ai tuoi link', 'Usa i preferiti già caricati o prova un esempio nella sezione qui sotto.']
+  }[mode];
+  document.getElementById('upload-eyebrow').textContent = copy[0];
+  document.getElementById('title-upload').textContent = copy[1];
+  document.getElementById('upload-description').textContent = copy[2];
   
   // Rimuovi classe active da tutti i tab
   elements.modeConvertTab.classList.remove('active');
@@ -1959,6 +2020,7 @@ function switchAppMode(mode) {
     }
     updateExploreTabUI();
   }
+  syncControlStates();
 }
 
 function toggleCompareInputMode(fileKey, inputMode) {
@@ -2209,11 +2271,11 @@ function renderCompareTable() {
     let folderHtml = '';
     if (item.status === 'added') {
       folderHtml = item.folderPath.length > 0 
-        ? `<span class="folder-tag" title="${item.folderPath.join(' / ')}">${item.folderPath[item.folderPath.length - 1]}</span>`
+        ? `<span class="folder-tag" title="${escapeHTML(item.folderPath.join(' / '))}">${escapeHTML(item.folderPath[item.folderPath.length - 1])}</span>`
         : `<span class="text-muted">—</span>`;
     } else if (item.status === 'removed') {
       folderHtml = item.folderPath.length > 0 
-        ? `<span class="folder-tag diff-old" title="${item.folderPath.join(' / ')}">${item.folderPath[item.folderPath.length - 1]}</span>`
+        ? `<span class="folder-tag diff-old" title="${escapeHTML(item.folderPath.join(' / '))}">${escapeHTML(item.folderPath[item.folderPath.length - 1])}</span>`
         : `<span class="text-muted">—</span>`;
     } else if (item.status === 'modified') {
       if (item.folderChanged) {
@@ -2221,19 +2283,19 @@ function renderCompareTable() {
         const newFolder = item.newFolderPath.length > 0 ? item.newFolderPath[item.newFolderPath.length - 1] : 'Radice';
         folderHtml = `
           <div class="diff-container">
-            <span class="folder-tag diff-old" title="${item.oldFolderPath.join(' / ')}">${oldFolder}</span>
+            <span class="folder-tag diff-old" title="${escapeHTML(item.oldFolderPath.join(' / '))}">${escapeHTML(oldFolder)}</span>
             <div style="font-size: 0.75rem; color: var(--text-muted); margin: 0.1rem 0;">&darr; spostato in</div>
-            <span class="folder-tag diff-new" title="${item.newFolderPath.join(' / ')}">${newFolder}</span>
+            <span class="folder-tag diff-new" title="${escapeHTML(item.newFolderPath.join(' / '))}">${escapeHTML(newFolder)}</span>
           </div>
         `;
       } else {
         folderHtml = item.newFolderPath.length > 0 
-          ? `<span class="folder-tag" title="${item.newFolderPath.join(' / ')}">${item.newFolderPath[item.newFolderPath.length - 1]}</span>`
+          ? `<span class="folder-tag" title="${escapeHTML(item.newFolderPath.join(' / '))}">${escapeHTML(item.newFolderPath[item.newFolderPath.length - 1])}</span>`
           : `<span class="text-muted">—</span>`;
       }
     } else {
       folderHtml = item.folderPath.length > 0 
-        ? `<span class="folder-tag" title="${item.folderPath.join(' / ')}">${item.folderPath[item.folderPath.length - 1]}</span>`
+        ? `<span class="folder-tag" title="${escapeHTML(item.folderPath.join(' / '))}">${escapeHTML(item.folderPath[item.folderPath.length - 1])}</span>`
         : `<span class="text-muted">—</span>`;
     }
 
@@ -2241,7 +2303,7 @@ function renderCompareTable() {
     let titleHtml = '';
     let faviconHtml = '';
     if (item.icon) {
-      faviconHtml = `<img class="bookmark-favicon" src="${item.icon}" alt="" onerror="this.style.display='none'">`;
+      faviconHtml = `<img class="bookmark-favicon" src="${escapeHTML(item.icon)}" alt="" onerror="this.style.display='none'">`;
     } else {
       faviconHtml = `<svg class="bookmark-favicon text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="padding: 2px;">
         <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
@@ -2299,10 +2361,10 @@ function renderCompareTable() {
           </button>
         </div>
       </td>
-      <td class="col-url" title="${item.url}">
-        <a href="${item.url}" target="_blank" rel="noopener noreferrer">${escapeHTML(item.url)}</a>
+      <td class="col-url" title="${escapeHTML(item.url)}">
+        <a href="${escapeHTML(safeBookmarkUrl(item.url) || '#')}" target="_blank" rel="noopener noreferrer">${escapeHTML(item.url)}</a>
       </td>
-      <td class="col-date" style="color: var(--text-secondary); font-size: 0.8rem;">${displayDate}</td>
+      <td class="col-date" style="color: var(--text-secondary); font-size: 0.8rem;">${escapeHTML(displayDate)}</td>
     `;
     elements.compareTableBody.appendChild(tr);
   });
@@ -2544,8 +2606,12 @@ function selectFolderByPath(folderPath) {
 
 // --- LOGICA MODAL GENERATORE QR CODE ---
 let activeQRUrl = '';
+let qrReturnFocus = null;
+let qrInertElements = [];
+let qrPreviousOverflow = '';
 
 function openQRModal(url, title) {
+  qrReturnFocus = document.activeElement;
   activeQRUrl = url;
   if (elements.qrModalTitle) elements.qrModalTitle.textContent = title || 'QR Code';
   if (elements.qrModalUrl) elements.qrModalUrl.textContent = url;
@@ -2564,11 +2630,27 @@ function openQRModal(url, title) {
     console.error('Errore nella generazione del QR Code:', err);
   }
   
-  if (elements.qrModal) elements.qrModal.classList.add('active');
+  if (elements.qrModal) {
+    elements.qrModal.classList.add('active');
+    elements.qrModal.setAttribute('aria-hidden', 'false');
+    qrInertElements = [...document.querySelectorAll('.app-header, .app-container, .app-footer, .skip-link')]
+      .filter(element => !element.inert);
+    qrInertElements.forEach(element => { element.inert = true; });
+    qrPreviousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    elements.qrModalClose.focus();
+  }
 }
 
 function closeQRModal() {
-  if (elements.qrModal) elements.qrModal.classList.remove('active');
+  if (elements.qrModal) {
+    elements.qrModal.classList.remove('active');
+    elements.qrModal.setAttribute('aria-hidden', 'true');
+    qrInertElements.forEach(element => { element.inert = false; });
+    qrInertElements = [];
+    document.body.style.overflow = qrPreviousOverflow;
+    if (qrReturnFocus?.isConnected) qrReturnFocus.focus();
+  }
 }
 
 // --- LA MACCHINA DEL TEMPO (TIMELINE NOSTALGIA) ---
@@ -2848,8 +2930,7 @@ function selectTimelineIndex(idx) {
     for (let i = 0; i < bars.length; i++) {
       if (i === idx && appState.timelineActive) {
         bars[i].classList.add('active');
-        // Scorri istogramma per tenere la barra visibile se ci fosse uno scroll
-        bars[i].scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' });
+        // Le barre sono già visibili: centrarle sposterebbe anche la pagina.
       } else {
         bars[i].classList.remove('active');
       }
@@ -3117,8 +3198,12 @@ function renderTarotGrid() {
     
     btnRead.addEventListener('click', (e) => {
       e.stopPropagation();
-      window.open(card.bookmark.url, '_blank');
-      showToast("Link aperto in una nuova scheda!");
+      if (safeBookmarkUrl(card.bookmark.url)) {
+        openBookmarkUrl(card.bookmark.url);
+        showToast("Link aperto in una nuova scheda!");
+      } else {
+        showToast("URL non valido o protocollo non supportato.");
+      }
     });
     
     btnPostpone.addEventListener('click', (e) => {

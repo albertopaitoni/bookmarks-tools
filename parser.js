@@ -20,7 +20,7 @@ export function parseBookmarks(htmlContent) {
       try {
         json = JSON.parse(trimmed);
       } catch (e) {
-        console.error('Failed to parse bookmarks JSON content:', e);
+        throw new Error('Contenuto JSON non valido: verifica il file di preferiti.', { cause: e });
       }
     }
   }
@@ -234,6 +234,8 @@ export function parseBookmarks(htmlContent) {
  * @returns {string} Stringa JSON decodificata.
  */
 export function decompressMozLz4(uint8) {
+  const invalid = () => { throw new Error('Backup Firefox LZ4 corrotto o troncato.'); };
+  if (!(uint8 instanceof Uint8Array) || uint8.length < 12) invalid();
   // 1. Verifica header: mozLz40\0 (8 byte)
   const magic = [109, 111, 122, 76, 122, 52, 48, 0]; // "mozLz40\0"
   for (let i = 0; i < 8; i++) {
@@ -243,63 +245,61 @@ export function decompressMozLz4(uint8) {
   }
 
   // 2. Legge la dimensione scompattata (4 byte little-endian, a partire dall'offset 8)
-  const uncompressedSize = uint8[8] | (uint8[9] << 8) | (uint8[10] << 16) | (uint8[11] << 24);
+  const uncompressedSize = new DataView(uint8.buffer, uint8.byteOffset, uint8.byteLength).getUint32(8, true);
+  // Limite esplicito per evitare allocazioni incontrollate da header corrotti.
+  if (uncompressedSize > 256 * 1024 * 1024) {
+    throw new Error('Il backup Firefox supera il limite di 256 MiB decompressi.');
+  }
 
   // 3. Decompressione LZ4 block payload a partire dall'offset 12
   const dest = new Uint8Array(uncompressedSize);
   let i = 12;
   let o = 0;
 
+  function readLength(base) {
+    if (base !== 15) return base;
+    let extension;
+    do {
+      if (i >= uint8.length) invalid();
+      extension = uint8[i++];
+      base += extension;
+    } while (extension === 255);
+    return base;
+  }
+
   while (i < uint8.length && o < uncompressedSize) {
     const token = uint8[i++];
-    let literalLen = token >> 4;
-    if (literalLen === 15) {
-      while (uint8[i] === 255) {
-        literalLen += 255;
-        i++;
-      }
-      literalLen += uint8[i++];
-    }
+    const literalLen = readLength(token >> 4);
+    if (literalLen > uint8.length - i || literalLen > uncompressedSize - o) invalid();
 
     // Copia i letterali
-    for (let j = 0; j < literalLen; j++) {
-      if (i < uint8.length && o < uncompressedSize) {
-        dest[o++] = uint8[i++];
-      }
-    }
+    dest.set(uint8.subarray(i, i + literalLen), o);
+    i += literalLen;
+    o += literalLen;
 
     if (i >= uint8.length || o >= uncompressedSize) {
       break;
     }
 
     // Legge l'offset della corrispondenza (2 byte little-endian)
+    if (i + 2 > uint8.length) invalid();
     const offset = uint8[i] | (uint8[i + 1] << 8);
     i += 2;
+    if (offset === 0 || offset > o) invalid();
 
     // Lunghezza corrispondenza (match length)
-    let matchLen = token & 0x0f;
-    if (matchLen === 15) {
-      while (uint8[i] === 255) {
-        matchLen += 255;
-        i++;
-      }
-      matchLen += uint8[i++];
-    }
-    matchLen += 4; // Lunghezza minima per corrispondenza LZ4
+    const matchLen = readLength(token & 0x0f) + 4;
+    if (matchLen > uncompressedSize - o) invalid();
 
     let ref = o - offset;
-    if (ref < 0) {
-      throw new Error("Errore durante la decompressione LZ4: offset fuori limite.");
-    }
 
     // Copia la corrispondenza (può sovrapporsi, quindi va fatto byte per byte in ordine)
     for (let j = 0; j < matchLen; j++) {
-      if (o < uncompressedSize) {
-        dest[o++] = dest[ref++];
-      }
+      dest[o++] = dest[ref++];
     }
   }
 
+  if (o !== uncompressedSize || i !== uint8.length) invalid();
   // Converte dest in stringa UTF-8
   const decoder = new TextDecoder("utf-8");
   return decoder.decode(dest);

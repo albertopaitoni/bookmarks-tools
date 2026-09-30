@@ -9,13 +9,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=1.0.2">
+  <link rel="stylesheet" href="style.css?v=1.1.0">
   <!-- D3.js per Grafici e Mappe Mentali -->
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <!-- QRious per generazione QR Code lato client -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Vai agli strumenti</a>
 
   <!-- Background Decorative Orbs for Glowing Aesthetics -->
   <div class="glow-orb orb-1" aria-hidden="true"></div>
@@ -30,39 +31,42 @@
         </svg>
         <span class="logo-text">Bookmarks<span class="gradient-text">Tools</span></span>
       </div>
-      <p class="header-subtitle">Trasforma i file preferiti HTML in array strutturati, alberi JSON, matrici CSV, liste Markdown e tabelle SQL</p>
+      <span class="privacy-badge"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3z"/><path d="M8 12l3 3 5-6"/></svg>Elaborazione locale nel browser</span>
+      <h1>I tuoi preferiti, più organizzati.</h1>
+      <p class="header-subtitle">Converti, confronta e riscopri i link che hai salvato. I file restano sul tuo dispositivo.</p>
     </div>
   </header>
 
-  <main class="app-container">
+  <main class="app-container" id="main-content" tabindex="-1">
     
     <!-- Selettore della Modalità Principale -->
-    <div class="app-mode-tabs glass">
+    <div class="app-mode-tabs glass" role="group" aria-label="Strumenti per i preferiti">
       <button type="button" class="btn-tab-mode active" id="mode-convert-tab">
         <svg class="icon-small" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
         </svg>
-        <span>Converti</span>
+        <span>Converti<small>Esporta in 5 formati</small></span>
       </button>
       <button type="button" class="btn-tab-mode" id="mode-compare-tab">
         <svg class="icon-small" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
         </svg>
-        <span>Confronta</span>
+        <span>Confronta<small>Trova le differenze</small></span>
       </button>
       <button type="button" class="btn-tab-mode" id="mode-explore-tab">
         <svg class="icon-small" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19a7 7 0 100-14 7 7 0 000 14zm0 0v-2m0-10V5M5 12H3m14 0h2m-9-4l3 3m-3 3l-3-3" />
         </svg>
-        <span>Esplora</span>
+        <span>Esplora<small>Riscopri i tuoi link</small></span>
       </button>
     </div>
     
     <!-- Sezione 1: Upload e Configurazione -->
     <section class="config-section card glass" id="sec-upload">
       <div class="card-header">
-        <h2 id="title-upload">1. Carica o Incolla i Preferiti</h2>
-        <p class="card-desc">Trascina il file HTML esportato dal browser o incolla direttamente il codice sorgente</p>
+        <p class="section-eyebrow" id="upload-eyebrow">01 / IMPORTA I PREFERITI</p>
+        <h2 id="title-upload">Da un file a una raccolta organizzata</h2>
+        <p class="card-desc" id="upload-description">Carica l’esportazione del tuo browser, poi scegli il formato da scaricare.</p>
       </div>
 
       <!-- Layout a due colonne per configurazione -->
@@ -81,8 +85,8 @@
               <svg class="dropzone-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
               </svg>
-              <p class="dropzone-text">Trascina qui il file <code>.html</code>, <code>.json</code>, <code>.jsonlz4</code> o <code>Bookmarks</code> oppure</p>
-              <label for="file-input" class="btn btn-primary" id="lbl-file-input">Sfoglia i File</label>
+              <p class="dropzone-text"><strong>Trascina qui i tuoi preferiti</strong><br>HTML, JSON, JSONLZ4 o file Bookmarks</p>
+              <button type="button" class="btn btn-primary" id="lbl-file-input" data-file-picker="file-input">Scegli un file</button>
               <input type="file" id="file-input" accept=".html,.htm,.json,.jsonlz4,*" style="display: none;">
               <p class="file-info" id="selected-file-info"></p>
             </div>
@@ -90,6 +94,7 @@
  
           <!-- Area Textarea per Incolla (nascosta all'inizio) -->
           <div class="text-paste-area hidden" id="paste-container">
+            <label class="field-label" for="text-paste">Codice dei preferiti (HTML o JSON)</label>
             <textarea id="text-paste" placeholder="Incolla qui il codice sorgente HTML dei tuoi preferiti (inizia tipicamente con <!DOCTYPE NETSCAPE-Bookmark-file-1>)..." aria-label="Codice sorgente HTML"></textarea>
           </div>
         </div>
@@ -98,7 +103,8 @@
         <div class="config-settings-column">
           <!-- Impostazioni di Conversione -->
           <div class="parser-options">
-            <h3>Opzioni di Elaborazione</h3>
+            <h3>Prepara la conversione</h3>
+            <p class="settings-hint">Le impostazioni consigliate sono già selezionate.</p>
             <div class="options-grid">
               <div class="option-item">
                 <label class="switch-container">
@@ -119,8 +125,8 @@
           </div>
  
           <div class="action-bar">
-            <button type="button" class="btn btn-gradient btn-large" id="btn-process">Converti Ora</button>
-            <button type="button" class="btn btn-outline" id="btn-load-example">Carica file Esempio</button>
+            <button type="button" class="btn btn-gradient btn-large" id="btn-process">Converti preferiti</button>
+            <button type="button" class="btn btn-outline" id="btn-load-example">Prova con un esempio</button>
           </div>
         </div>
  
@@ -151,7 +157,7 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                 </svg>
                 <p class="dropzone-text">Trascina qui il <b>File A</b> (HTML/JSON/JSONLZ4)</p>
-                <label for="file-input-a" class="btn btn-primary btn-small" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Sfoglia</label>
+                <button type="button" class="btn btn-primary" data-file-picker="file-input-a">Scegli file A</button>
                 <input type="file" id="file-input-a" accept=".html,.htm,.json,.jsonlz4,*" style="display: none;">
                 <p class="file-info" id="selected-file-info-a"></p>
               </div>
@@ -159,6 +165,7 @@
 
             <!-- Paste Area File A -->
             <div class="text-paste-area hidden" id="paste-container-a">
+              <label class="field-label" for="text-paste-a">Codice del file A (HTML o JSON)</label>
               <textarea id="text-paste-a" placeholder="Incolla il codice HTML o JSON del File A (vecchio)..." aria-label="Codice sorgente HTML/JSON File A"></textarea>
             </div>
           </div>
@@ -184,7 +191,7 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                 </svg>
                 <p class="dropzone-text">Trascina qui il <b>File B</b> (HTML/JSON/JSONLZ4)</p>
-                <label for="file-input-b" class="btn btn-primary btn-small" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Sfoglia</label>
+                <button type="button" class="btn btn-primary" data-file-picker="file-input-b">Scegli file B</button>
                 <input type="file" id="file-input-b" accept=".html,.htm,.json,.jsonlz4,*" style="display: none;">
                 <p class="file-info" id="selected-file-info-b"></p>
               </div>
@@ -192,6 +199,7 @@
 
             <!-- Paste Area File B -->
             <div class="text-paste-area hidden" id="paste-container-b">
+              <label class="field-label" for="text-paste-b">Codice del file B (HTML o JSON)</label>
               <textarea id="text-paste-b" placeholder="Incolla il codice HTML o JSON del File B (nuovo)..." aria-label="Codice sorgente HTML/JSON File B"></textarea>
             </div>
           </div>
@@ -228,7 +236,7 @@
     </section>
 
     <!-- Indicatore di Caricamento / Elaborazione -->
-    <div class="loader-container hidden" id="app-loader">
+    <div class="loader-container hidden" id="app-loader" role="status" aria-live="polite">
       <div class="spinner"></div>
       <p id="loader-message">Conversione in corso... Elaborazione dei dati in corso.</p>
     </div>
@@ -360,7 +368,7 @@
             
             <div class="tree-controls">
               <div class="tree-search-wrapper">
-                <input type="text" id="tree-search-input" placeholder="Cerca cartella..." aria-label="Cerca cartella nell'albero">
+                <input type="search" id="tree-search-input" placeholder="Cerca cartella..." aria-label="Cerca cartella nell'albero">
                 <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
@@ -433,7 +441,7 @@
                 <p class="card-desc">Preferiti elencati in una tabella ricercabile e filtrabile</p>
               </div>
               <div class="table-search-wrapper">
-                <input type="text" id="table-search" placeholder="Cerca preferiti..." aria-label="Cerca preferiti">
+                <input type="search" id="table-search" placeholder="Cerca titolo, URL o cartella…" aria-label="Cerca preferiti">
                 <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
@@ -754,7 +762,7 @@
                 <p class="card-desc">Elenco delle modifiche rilevate tra i due file di preferiti</p>
               </div>
               <div class="table-search-wrapper">
-                <input type="text" id="compare-table-search" placeholder="Cerca modifiche..." aria-label="Cerca modifiche">
+                <input type="search" id="compare-table-search" placeholder="Cerca modifiche..." aria-label="Cerca modifiche">
                 <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
@@ -860,7 +868,7 @@
   </footer>
 
   <!-- Popup Modal per il Codice QR -->
-  <div class="qr-modal-overlay" id="qr-modal">
+  <div class="qr-modal-overlay" id="qr-modal" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title" aria-hidden="true">
     <div class="qr-modal-content">
       <button type="button" class="qr-modal-close" id="qr-modal-close" aria-label="Chiudi popup">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">

@@ -4,6 +4,8 @@
  * Utilizza D3.js caricato globalmente dal browser.
  */
 
+import { openBookmarkUrl } from './urls.js';
+
 let forceSimulation = null;
 let currentZoom = null;
 let currentSvg = null;
@@ -189,7 +191,7 @@ function drawForceGraph(container, treeData, options, onFolderSelected) {
       .on("dblclick", (event, d) => {
         event.stopPropagation();
         if (d.data.type === 'bookmark' && d.data.url) {
-          window.open(d.data.url, '_blank');
+          openBookmarkUrl(d.data.url);
         } else if (d.data.type === 'folder') {
           // Doppio click: filtra la tabella/dashboard per questa cartella
           if (onFolderSelected) {
@@ -346,7 +348,7 @@ function drawSunburstChart(container, treeData, options, onFolderSelected) {
         // Zoom in sulla cartella cliccata
         zoomTo(d);
       } else if (d.data.type === 'bookmark' && d.data.url) {
-        window.open(d.data.url, '_blank');
+        openBookmarkUrl(d.data.url);
       }
     })
     .on("dblclick", (event, d) => {
